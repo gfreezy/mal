@@ -1,6 +1,7 @@
 .bash_history
 .cache
 .cargo
+.idea
 .config
 .mal-history
 .crystal
@@ -141,3 +142,6 @@ elm/elm-stuff
 elm/*.js
 !elm/node_readline.js
 !elm/bootstrap.js
+rs/target/
+rs/Cargo.lock
+rs/.cargo
