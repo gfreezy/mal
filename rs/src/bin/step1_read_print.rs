@@ -1,23 +1,21 @@
 extern crate failure;
-extern crate rustyline;
 extern crate rs;
+extern crate rustyline;
 
 use failure::Error;
-use rustyline::Editor;
-use rustyline::error::ReadlineError;
+use rs::printer::pr_str;
 use rs::reader::read_str;
 use rs::types::MalType;
-use rs::printer::pr_str;
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
 
 fn read(line: &str) -> Result<MalType, Error> {
     read_str(line)
 }
 
-
 fn eval(s: &MalType) -> &MalType {
     s
 }
-
 
 fn print(s: &MalType) -> String {
     pr_str(s)
@@ -28,7 +26,6 @@ fn rep(s: &str) -> Result<String, Error> {
 }
 
 const HIST_PATH: &str = ".mal-history";
-
 
 fn main() -> Result<(), Error> {
     let mut rl = Editor::<()>::new();
@@ -43,12 +40,12 @@ fn main() -> Result<(), Error> {
                 rl.add_history_entry(line.as_ref());
                 match rep(line.as_ref()) {
                     Ok(s) => println!("{}", s),
-                    Err(e) => println!("{}", e)
+                    Err(e) => println!("{}", e),
                 }
-            },
+            }
             Err(ReadlineError::Eof) | Err(ReadlineError::Interrupted) => {
                 break;
-            },
+            }
             Err(err) => {
                 return Err(err.into());
             }

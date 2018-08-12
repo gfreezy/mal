@@ -1,13 +1,11 @@
+use failure::Error;
 use regex::Regex;
 use types::MalType;
-use failure::Error;
-
 
 struct Reader {
     tokens: Vec<String>,
     current_pos: usize,
 }
-
 
 impl Reader {
     fn new(tokens: Vec<String>) -> Self {
@@ -28,27 +26,26 @@ impl Reader {
     }
 }
 
-
 pub fn read_str(s: &str) -> Result<MalType, Error> {
     let tokens = tokenizer(s);
     let mut reader = Reader::new(tokens);
     read_form(&mut reader)
 }
 
-
 fn tokenizer(s: &str) -> Vec<String> {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"|;.*|[^\s\[\]{}('"`,;)]*)"#).expect("make regexp");
+        static ref RE: Regex =
+            Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"|;.*|[^\s\[\]{}('"`,;)]*)"#)
+                .expect("make regexp");
     }
 
     let mut caps = Vec::new();
     for cap in RE.captures_iter(s) {
         caps.push(cap[1].to_string());
     }
-//    println!("{:?}", caps);
+    //    println!("{:?}", caps);
     caps
 }
-
 
 fn read_form(reader: &mut Reader) -> Result<MalType, Error> {
     if let Some(token) = reader.peek() {
@@ -69,6 +66,7 @@ fn read_form(reader: &mut Reader) -> Result<MalType, Error> {
                 }
             }
             Some(':') => return read_keyword(reader),
+            Some('"') => return read_string(reader),
             Some('^') => return read_with_meta(reader),
             Some('@') => return read_deref(reader),
             Some(_) => return read_atom(reader),
@@ -78,7 +76,6 @@ fn read_form(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-
 fn read_list(reader: &mut Reader) -> Result<MalType, Error> {
     let mut ret = Vec::new();
     loop {
@@ -86,7 +83,7 @@ fn read_list(reader: &mut Reader) -> Result<MalType, Error> {
 
         let c = match reader.peek() {
             None => bail!("expected ')'"),
-            Some(t) => t
+            Some(t) => t,
         };
         if c == ")" {
             return Ok(MalType::List(ret));
@@ -96,7 +93,6 @@ fn read_list(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-
 fn read_vec(reader: &mut Reader) -> Result<MalType, Error> {
     let mut ret = Vec::new();
     loop {
@@ -104,7 +100,7 @@ fn read_vec(reader: &mut Reader) -> Result<MalType, Error> {
 
         let c = match reader.peek() {
             None => bail!("expected ']'"),
-            Some(t) => t
+            Some(t) => t,
         };
         if c == "]" {
             return Ok(MalType::Vec(ret));
@@ -114,7 +110,6 @@ fn read_vec(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-
 fn read_hashmap(reader: &mut Reader) -> Result<MalType, Error> {
     let mut ret = Vec::new();
     loop {
@@ -122,7 +117,7 @@ fn read_hashmap(reader: &mut Reader) -> Result<MalType, Error> {
 
         let c = match reader.peek() {
             None => bail!("expected '}'"),
-            Some(t) => t
+            Some(t) => t,
         };
         if c == "}" {
             return Ok(MalType::Hashmap(ret));
@@ -132,30 +127,25 @@ fn read_hashmap(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-
 fn read_quote(reader: &mut Reader) -> Result<MalType, Error> {
     reader.next();
     Ok(MalType::Quote(Box::new(read_form(reader)?)))
 }
-
 
 fn read_quasiquote(reader: &mut Reader) -> Result<MalType, Error> {
     reader.next();
     Ok(MalType::Quasiquote(Box::new(read_form(reader)?)))
 }
 
-
 fn read_unquote(reader: &mut Reader) -> Result<MalType, Error> {
     reader.next();
     Ok(MalType::Unquote(Box::new(read_form(reader)?)))
 }
 
-
 fn read_splice_unquote(reader: &mut Reader) -> Result<MalType, Error> {
     reader.next();
     Ok(MalType::SpliceUnquote(Box::new(read_form(reader)?)))
 }
-
 
 fn read_atom(reader: &mut Reader) -> Result<MalType, Error> {
     match reader.peek() {
@@ -170,11 +160,20 @@ fn read_atom(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
+fn read_string(reader: &mut Reader) -> Result<MalType, Error> {
+    match reader.peek() {
+        None => unreachable!(),
+        Some(token) => {
+            return Ok(MalType::String(token.to_owned()));
+        }
+    }
+}
+
 fn read_keyword(reader: &mut Reader) -> Result<MalType, Error> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
-            return Ok(MalType::Symbol(token.to_owned()));
+            return Ok(MalType::Keyword(token.to_owned()));
         }
     }
 }
@@ -186,7 +185,6 @@ fn read_with_meta(reader: &mut Reader) -> Result<MalType, Error> {
     let vector = read_form(reader)?;
     return Ok(MalType::WithMeta(Box::new(vector), Box::new(hashmap)));
 }
-
 
 fn read_deref(reader: &mut Reader) -> Result<MalType, Error> {
     reader.next();
