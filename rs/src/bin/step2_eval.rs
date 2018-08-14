@@ -38,14 +38,6 @@ fn read(line: &str) -> Result<MalType, Error> {
 }
 
 fn eval(s: MalType, env: &ReplEnv) -> Result<MalType, Error> {
-    if !s.is_collection() {
-        return eval_ast(s, env);
-    }
-
-    if s.is_empty_collection() {
-        return Ok(s);
-    }
-
     let new_mal = eval_ast(s, env)?;
     if !new_mal.did_collection_have_leading_func() {
         return Ok(new_mal);
