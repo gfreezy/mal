@@ -1,4 +1,10 @@
-#[derive(Debug, Clone)]
+use env::Env;
+use failure::Error;
+
+
+pub type CoreFunc = fn(Vec<MalType>) -> Result<MalType, Error>;
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum MalType {
     List(Vec<MalType>),
     Vec(Vec<MalType>),
@@ -13,20 +19,38 @@ pub enum MalType {
     SpliceUnquote(Box<MalType>),
     WithMeta(Box<MalType>, Box<MalType>),
     Deref(String),
-    Func(fn(f64, f64) -> f64),
+    Nil,
+    Bool(bool),
+
+    Func(CoreFunc),
+    Closure(Box<Closure>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Closure {
+    pub parameters: MalType,
+    pub body: MalType,
+    pub env: Env
 }
 
 
 impl MalType {
-    pub fn get_func(self) -> fn(f64, f64) -> f64 {
+    pub fn get_func(self) -> CoreFunc {
         match self {
             MalType::Func(f) => f,
             _ => unreachable!()
         }
     }
 
-    pub fn get_symbol(&self) -> &String {
+    pub fn get_symbol(self) -> String {
         match self {
+            MalType::Symbol(s) => s,
+            _ => unreachable!()
+        }
+    }
+
+    pub fn get_symbol_ref(&self) -> &String {
+        match *self {
             MalType::Symbol(ref s) => s,
             _ => unreachable!()
         }
@@ -66,6 +90,20 @@ impl MalType {
 
     pub fn is_func(&self) -> bool {
         if let &MalType::Func(_) = self {
+            return true;
+        }
+        return false;
+    }
+
+    pub fn is_nil(&self) -> bool {
+        if let MalType::Nil = self {
+            return true;
+        }
+        return false;
+    }
+
+    pub fn is_closure(&self) -> bool {
+        if let &MalType::Closure(_) = self {
             return true;
         }
         return false;
@@ -121,7 +159,7 @@ impl MalType {
     }
 
     pub fn did_collection_have_leading_func(&self) -> bool {
-        if self.is_empty_collection() {
+        if !self.is_collection() || self.is_empty_collection() {
             return false;
         }
 
@@ -133,8 +171,34 @@ impl MalType {
         }
     }
 
+    pub fn did_collection_have_leading_symbol(&self) -> bool {
+        if !self.is_collection() || self.is_empty_collection() {
+            return false;
+        }
+
+        match *self {
+            MalType::List(ref l) | MalType::Vec(ref l) | MalType::Hashmap(ref l) => {
+                l[0].is_symbol()
+            }
+            _ => unreachable!()
+        }
+    }
+
+    pub fn did_collection_have_leading_closure(&self) -> bool {
+        if !self.is_collection() || self.is_empty_collection() {
+            return false;
+        }
+
+        match *self {
+            MalType::List(ref l) | MalType::Vec(ref l) | MalType::Hashmap(ref l) => {
+                l[0].is_closure()
+            }
+            _ => unreachable!()
+        }
+    }
+
     pub fn get_first_symbol(&self) -> Option<&MalType> {
-        if self.is_empty_collection() {
+        if !self.is_collection() || self.is_empty_collection() {
             return None;
         }
 

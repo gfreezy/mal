@@ -155,7 +155,13 @@ fn read_atom(reader: &mut Reader) -> Result<MalType, Error> {
                 return Ok(MalType::Num(num));
             }
 
-            return Ok(MalType::Symbol(token.to_owned()));
+            Ok(match token.as_ref() {
+                "nil" => MalType::Nil,
+                "true" => MalType::Bool(true),
+                "false" => MalType::Bool(false),
+                _ => MalType::Symbol(token.to_owned())
+            })
+
         }
     }
 }

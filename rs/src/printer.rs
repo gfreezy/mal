@@ -5,6 +5,8 @@ pub fn pr_str(mal: &MalType) -> String {
 
     match mal {
         MalType::Symbol(sym) => s.push_str(sym),
+        MalType::Nil => s.push_str("nil"),
+        MalType::Bool(b) => s.push_str(&format!("{}", b)),
         MalType::Keyword(k) => s.push_str(k),
         MalType::String(k) => s.push_str(k),
         MalType::Deref(k) => s.push_str(&format!("(deref {})", k)),
@@ -63,7 +65,12 @@ pub fn pr_str(mal: &MalType) -> String {
             s.push_str(&pr_str(hashmap));
             s.push_str(")");
         },
-        _ => {}
+        MalType::Func(..) => {
+            s.push_str("#<function>");
+        },
+        MalType::Closure(c) => {
+            s.push_str(&format!("{:#?}", c));
+        }
     }
 
     s
