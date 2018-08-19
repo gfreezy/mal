@@ -37,6 +37,7 @@ fn prn(mut params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::Nil)
 }
 
+#[allow(unused_mut)]
 fn list(mut params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::List(params))
 }

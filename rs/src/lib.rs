@@ -6,6 +6,9 @@ extern crate failure;
 extern crate regex;
 #[macro_use]
 extern crate lazy_static;
+extern crate indextree;
+#[macro_use]
+extern crate debug_stub_derive;
 
 pub mod printer;
 pub mod reader;

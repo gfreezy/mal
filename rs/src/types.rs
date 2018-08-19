@@ -26,10 +26,11 @@ pub enum MalType {
     Closure(Box<Closure>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(DebugStub, Clone, PartialEq)]
 pub struct Closure {
     pub parameters: MalType,
     pub body: MalType,
+    #[debug_stub=".."]
     pub env: Env
 }
 

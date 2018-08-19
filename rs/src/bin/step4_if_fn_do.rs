@@ -3,6 +3,9 @@
 extern crate failure;
 extern crate rs;
 extern crate rustyline;
+#[macro_use]
+extern crate log;
+extern crate pretty_env_logger;
 
 use failure::Error;
 use rs::env::Env;
@@ -83,8 +86,22 @@ fn eval(mal: MalType, env: &mut Env) -> Result<MalType, Error> {
                     body: list.remove(0),
                 })))
             },
+            "not" => {
+                ensure!(list.len() == 1, "not should have 1 params");
+                let condition = eval(list.remove(0), env)?;
+                return match condition {
+                    MalType::Nil | MalType::Bool(false) => {
+                        Ok(MalType::Bool(true))
+                    }
+                    _ => Ok(MalType::Bool(false))
+                }
+            },
+//            "pr-str" => {
+//                list
+//                eval(list)
+//
+//            },
             "env" => {
-                println!("{:#?}", env);
                 return Ok(MalType::Nil);
             }
             _ => {}
@@ -99,10 +116,30 @@ fn eval(mal: MalType, env: &mut Env) -> Result<MalType, Error> {
         }
         MalType::Closure(closure) => {
             let params = closure.parameters.get_items();
-            ensure!(list.len() == params.len() , "closure arguments not match params");
-            let binds: Vec<String> = params.into_iter().map(|mal| mal.get_symbol()).collect();
-            let exprs = list.into_iter().map(|el| eval(el, env)).collect::<Result<Vec<MalType>, Error>>()?;
-            let mut new_env = Env::new(Some(closure.env), binds, exprs);
+            let mut binds: Vec<String> = params.into_iter().map(|mal| mal.get_symbol()).collect();
+
+            let idx = binds.iter().position(|e| *e == "&");
+
+            let mut new_env = if let Some(idx) = idx {
+                ensure!(binds.len() == idx + 2, "& must be followed by a param name");
+                ensure!(list.len() >= idx, "closure arguments not match params");
+
+                // drop "&"
+                binds.remove(idx);
+                let mut exprs: Vec<MalType> = list.into_iter().map(|el| eval(el, env)).collect::<Result<Vec<MalType>, Error>>()?;
+                let positioned_args: Vec<MalType> = exprs.drain(0..idx).collect();
+                let varargs = exprs;
+                let mut exprs = positioned_args;
+                exprs.push(MalType::List(varargs));
+//                println!("{:#?}", &binds);
+//                println!("{:#?}", &exprs);
+                Env::new(Some(closure.env), binds, exprs)
+            } else {
+                ensure!(list.len() == binds.len(), "closure arguments not match params");
+                let exprs = list.into_iter().map(|el| eval(el, env)).collect::<Result<Vec<MalType>, Error>>()?;
+                Env::new(Some(closure.env), binds, exprs)
+            };
+
             eval(closure.body, &mut new_env)
         }
         _ => {
@@ -121,7 +158,9 @@ fn print(s: &MalType) -> String {
 }
 
 fn rep(s: &str, env: &mut Env) -> Result<String, Error> {
-    Ok(print(&eval(read(s)?, env)?))
+    let ret = Ok(print(&eval(read(s)?, env)?));
+//    println!("env: {}", env);
+    return ret;
 }
 
 fn eval_ast(ast: MalType, env: &mut Env) -> Result<MalType, Error> {
@@ -157,6 +196,8 @@ fn eval_ast(ast: MalType, env: &mut Env) -> Result<MalType, Error> {
 }
 
 fn main() -> Result<(), Error> {
+    pretty_env_logger::init();
+
     let mut rl = Editor::<()>::new();
     if rl.load_history(HIST_PATH).is_err() {
         println!("No previous history.")
