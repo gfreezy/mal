@@ -18,7 +18,7 @@ fn eval(s: &MalType) -> &MalType {
 }
 
 fn print(s: &MalType) -> String {
-    pr_str(s)
+    pr_str(s, true)
 }
 
 fn rep(s: &str) -> Result<String, Error> {

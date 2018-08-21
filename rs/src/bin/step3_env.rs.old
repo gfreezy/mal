@@ -36,51 +36,40 @@ fn read(line: &str) -> Result<MalType, Error> {
 }
 
 fn eval(mal: MalType, env: &mut Env) -> Result<MalType, Error> {
-    if !mal.is_collection() {
-        return eval_ast(mal, env);
-    }
-
-    if mal.is_empty_collection() {
-        return Ok(mal);
-    }
-
     let first_symbol = mal.get_first_symbol();
     if first_symbol.is_none() {
         return eval_ast(mal, env);
     }
 
-    let first_symbol_str = first_symbol.unwrap().get_symbol();
+    let first_symbol_str = first_symbol.unwrap().get_symbol_ref();
     match first_symbol_str.as_ref() {
         "def!" => {
             let new_list = mal.get_items();
-            let symbol_key = new_list[1].get_symbol().clone();
+            let symbol_key = new_list[1].get_symbol_ref().clone();
             let value = eval(new_list[2].clone(), env)?;
             Ok(env.set(symbol_key, value))
         }
         "let*" => {
-            let mut new_env = Env::new(Some(env.clone()));
+            let mut new_env = Env::new(Some(env.clone()), Vec::new(), Vec::new());
             let list = mal.get_items();
             let binding_list = list[1].get_items_ref();
             for index in (0..binding_list.len()).into_iter().step_by(2) {
-                let key = binding_list[index].get_symbol().clone();
+                let key = binding_list[index].get_symbol_ref().clone();
                 let value = eval(binding_list[index+1].clone(), &mut new_env)?;
                 new_env.set(key, value);
             }
             let formula = list[2].clone();
             eval(formula, &mut new_env)
-        }
-        _ => {
+        },
+        "+"|"-"|"*"|"/" => {
             let new_mal = eval_ast(mal, env)?;
-            if !new_mal.did_collection_have_leading_func() {
-                return Ok(new_mal);
-            }
-
             let new_list = new_mal.get_items();
             let func = new_list[0].clone().get_func();
             let args: Vec<f64> = new_list[1..].iter().map(|mal| mal.clone().get_number()).collect();
 
             Ok(MalType::Num(func(args[0], args[1])))
-        }
+        },
+        _ => eval_ast(mal, env)
     }
 }
 
@@ -131,7 +120,7 @@ fn main() -> Result<(), Error> {
         println!("No previous history.")
     }
 
-    let mut repl_env = Env::new(None);
+    let mut repl_env = Env::new(None, Vec::new(), Vec::new());
     repl_env.set("+".to_string(), MalType::Func(add));
     repl_env.set("-".to_string(), MalType::Func(minus));
     repl_env.set("*".to_string(), MalType::Func(multiply));

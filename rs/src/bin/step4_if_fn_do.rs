@@ -86,16 +86,6 @@ fn eval(mal: MalType, env: &mut Env) -> Result<MalType, Error> {
                     body: list.remove(0),
                 })))
             },
-            "not" => {
-                ensure!(list.len() == 1, "not should have 1 params");
-                let condition = eval(list.remove(0), env)?;
-                return match condition {
-                    MalType::Nil | MalType::Bool(false) => {
-                        Ok(MalType::Bool(true))
-                    }
-                    _ => Ok(MalType::Bool(false))
-                }
-            },
 //            "pr-str" => {
 //                list
 //                eval(list)
@@ -152,17 +142,6 @@ fn eval(mal: MalType, env: &mut Env) -> Result<MalType, Error> {
     }
 }
 
-
-fn print(s: &MalType) -> String {
-    pr_str(s)
-}
-
-fn rep(s: &str, env: &mut Env) -> Result<String, Error> {
-    let ret = Ok(print(&eval(read(s)?, env)?));
-//    println!("env: {}", env);
-    return ret;
-}
-
 fn eval_ast(ast: MalType, env: &mut Env) -> Result<MalType, Error> {
     match ast {
         MalType::Symbol(s) => {
@@ -195,6 +174,17 @@ fn eval_ast(ast: MalType, env: &mut Env) -> Result<MalType, Error> {
     }
 }
 
+
+fn print(s: &MalType) -> String {
+    pr_str(s, true)
+}
+
+fn rep(s: &str, env: &mut Env) -> Result<String, Error> {
+    let ret = Ok(print(&eval(read(s)?, env)?));
+//    println!("env: {}", env);
+    return ret;
+}
+
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 
@@ -208,6 +198,8 @@ fn main() -> Result<(), Error> {
     for (k, v) in ns.map {
         repl_env.set(k, MalType::Func(v));
     }
+
+    let _ = eval(read("(def! not (fn* (a) (if a false true)))")?, &mut repl_env)?;
 
     loop {
         let line = rl.readline("user> ");

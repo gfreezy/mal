@@ -32,8 +32,20 @@ fn divide(mut params: Vec<MalType>) -> Result<MalType, Error> {
 }
 
 fn prn(mut params: Vec<MalType>) -> Result<MalType, Error> {
-    ensure!(params.len() == 1, "prn should have 1 params");
-    println!("{}", pr_str(&params.remove(0)));
+    println!("{}", pr_str2(params)?.get_string());
+    Ok(MalType::Nil)
+}
+
+fn pr_str2(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, true)).collect::<Vec<String>>().join(" ")))
+}
+
+fn str2(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, false)).collect::<Vec<String>>().join("")))
+}
+
+fn println2(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    println!("{}", params.into_iter().map(|p| pr_str(&p, false)).collect::<Vec<String>>().join(" "));
     Ok(MalType::Nil)
 }
 
@@ -65,9 +77,23 @@ fn count(mut params: Vec<MalType>) -> Result<MalType, Error> {
 
 fn equal(mut params: Vec<MalType>) -> Result<MalType, Error> {
     ensure!(params.len() == 2, "= should have 2 params");
+    Ok(MalType::Bool(eq(params)))
+}
+
+fn eq(mut params: Vec<MalType>) -> bool {
     let left = params.remove(0);
     let right = params.remove(0);
-    Ok(MalType::Bool(left == right))
+    if left.is_collection() && right.is_collection() {
+        let inner_left = left.get_items();
+        let inner_right = right.get_items();
+        if inner_left.len() != inner_right.len() {
+            return false;
+        }
+
+        return inner_left.into_iter().zip(inner_right).all(|(l, r)| eq(vec![l, r]));
+    } else {
+        return left == right;
+    }
 }
 
 fn less_than(mut params: Vec<MalType>) -> Result<MalType, Error> {
@@ -106,6 +132,9 @@ impl Ns {
         map.insert("*".to_string(), multiply);
         map.insert("/".to_string(), divide);
         map.insert("prn".to_string(), prn);
+        map.insert("str".to_string(), str2);
+        map.insert("pr-str".to_string(), pr_str2);
+        map.insert("println".to_string(), println2);
         map.insert("list".to_string(), list);
         map.insert("list?".to_string(), is_list);
         map.insert("empty?".to_string(), is_empty);

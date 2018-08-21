@@ -57,6 +57,13 @@ impl MalType {
         }
     }
 
+    pub fn get_string(self) -> String {
+        match self {
+            MalType::String(s) => s,
+            _ => unreachable!()
+        }
+    }
+
     pub fn get_items(self) -> Vec<MalType> {
         match self {
             MalType::List(l) => l,

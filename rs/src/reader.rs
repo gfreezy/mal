@@ -170,7 +170,41 @@ fn read_string(reader: &mut Reader) -> Result<MalType, Error> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
-            return Ok(MalType::String(token.to_owned()));
+            let mut new_token = String::with_capacity(token.capacity());
+
+            let mut chars = token.chars().skip(1).peekable();
+            while let Some(c) = chars.next() {
+                if c == '\\' {
+                    match chars.peek() {
+                        Some('\\') => {
+                            new_token.push('\\');
+                            let _ = chars.next();
+                        },
+                        Some('n') => {
+                            new_token.push('\n');
+                            let _ = chars.next();
+                        },
+                        Some('t') => {
+                            new_token.push('\t');
+                            let _ = chars.next();
+                        },
+                        Some('"') => {
+                            new_token.push('"');
+                            let _ = chars.next();
+                        },
+                        _ => {
+                            new_token.push('\\');
+                        }
+                    }
+                } else {
+                    new_token.push(c);
+                }
+            }
+
+            let _ = new_token.pop();
+
+//            println!("{}", &new_token);
+            return Ok(MalType::String(new_token));
         }
     }
 }
