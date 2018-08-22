@@ -8,3 +8,5 @@ step3_env:
 	cargo build
 step4_if_fn_do:
 	cargo build
+step5_tco:
+	cargo build

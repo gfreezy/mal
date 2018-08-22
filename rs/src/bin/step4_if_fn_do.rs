@@ -121,8 +121,6 @@ fn eval(mal: MalType, env: &mut Env) -> Result<MalType, Error> {
                 let varargs = exprs;
                 let mut exprs = positioned_args;
                 exprs.push(MalType::List(varargs));
-//                println!("{:#?}", &binds);
-//                println!("{:#?}", &exprs);
                 Env::new(Some(closure.env), binds, exprs)
             } else {
                 ensure!(list.len() == binds.len(), "closure arguments not match params");
