@@ -2,11 +2,9 @@ use std::collections::HashMap;
 use types::{MalType, CoreFunc};
 use failure::Error;
 use printer::pr_str;
-
-
-pub struct Ns {
-    pub map: HashMap<String, CoreFunc>
-}
+use reader::read_str;
+use std::fs::File;
+use std::io::Read;
 
 
 fn add(mut params: Vec<MalType>) -> Result<MalType, Error> {
@@ -31,20 +29,20 @@ fn divide(mut params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::Num(params.remove(0).get_number() / params.remove(0).get_number()))
 }
 
-fn prn(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn prn(params: Vec<MalType>) -> Result<MalType, Error> {
     println!("{}", pr_str2(params)?.get_string());
     Ok(MalType::Nil)
 }
 
-fn pr_str2(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn pr_str2(params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, true)).collect::<Vec<String>>().join(" ")))
 }
 
-fn str2(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn str2(params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, false)).collect::<Vec<String>>().join("")))
 }
 
-fn println2(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn println2(params: Vec<MalType>) -> Result<MalType, Error> {
     println!("{}", params.into_iter().map(|p| pr_str(&p, false)).collect::<Vec<String>>().join(" "));
     Ok(MalType::Nil)
 }
@@ -75,7 +73,7 @@ fn count(mut params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::Num(param.get_items().len() as f64))
 }
 
-fn equal(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn equal(params: Vec<MalType>) -> Result<MalType, Error> {
     ensure!(params.len() == 2, "= should have 2 params");
     Ok(MalType::Bool(eq(params)))
 }
@@ -124,6 +122,28 @@ fn greater_than_equal(mut params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::Bool(left.get_number() >= right.get_number()))
 }
 
+fn read_string(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    ensure!(params.len() == 1, "read_string should have 1 params");
+    let p = params.remove(0);
+    let s = p.get_string();
+    read_str(&s)
+}
+
+fn slurp(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    ensure!(params.len() == 1, "slurp should have 1 params");
+    let p = params.remove(0);
+    let file_name = p.get_string();
+    let mut file = File::open(&file_name)?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)?;
+    Ok(MalType::String(content))
+}
+
+
+pub struct Ns {
+    pub map: HashMap<String, CoreFunc>
+}
+
 impl Ns {
     pub fn new() -> Self {
         let mut map: HashMap<String, CoreFunc> = HashMap::new();
@@ -144,6 +164,9 @@ impl Ns {
         map.insert("<=".to_string(), less_than_equal);
         map.insert(">".to_string(), greater_than);
         map.insert(">=".to_string(), greater_than_equal);
+        map.insert("read-string".to_string(), read_string);
+        map.insert("slurp".to_string(), slurp);
+
         Ns {
             map
         }

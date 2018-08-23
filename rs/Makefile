@@ -10,3 +10,5 @@ step4_if_fn_do:
 	cargo build
 step5_tco:
 	cargo build
+step6_file:
+	cargo build

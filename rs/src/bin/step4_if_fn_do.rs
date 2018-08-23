@@ -3,7 +3,6 @@
 extern crate failure;
 extern crate rs;
 extern crate rustyline;
-#[macro_use]
 extern crate log;
 extern crate pretty_env_logger;
 

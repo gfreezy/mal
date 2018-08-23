@@ -68,6 +68,14 @@ impl Env {
         });
         ret
     }
+
+    pub fn root(&self) -> Env {
+        let root = self.node_id.ancestors(&*self.arena.borrow()).last();
+        Env {
+            node_id: root.expect("no root node"),
+            arena: self.arena.clone(),
+        }
+    }
 }
 
 impl Display for Env {
