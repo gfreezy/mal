@@ -104,7 +104,9 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
                 "eval" => {
                     ensure!(list.len() == 1, "eval should have 1 params");
                     let ret = eval(list.remove(0), env.clone())?;
-                    return eval(ret, env.root());
+                    mal = ret;
+                    env = env.root();
+                    continue;
                 }
                 "swap!" => {
                     let mut params: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Result<Vec<MalType>, Error>>()?;
@@ -176,11 +178,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
                 continue;
             }
             _ => {
-                let mut remind: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Result<Vec<MalType>, Error>>()?;
-                remind.insert(0, new_first_mal);
-                Ok(MalType::List(
-                    remind
-                ))
+                bail!("No valid first item: {:#?}", new_first_mal)
             }
         };
     }
