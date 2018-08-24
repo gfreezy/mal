@@ -12,3 +12,5 @@ step5_tco:
 	cargo build
 step6_file:
 	cargo build
+step7_quote:
+	cargo build

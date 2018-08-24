@@ -24,6 +24,35 @@ use rustyline::error::ReadlineError;
 const HIST_PATH: &str = ".mal-history";
 
 
+fn quasiquote(ast: MalType) -> MalType {
+    if !is_pair(&ast) {
+        return MalType::List(vec![MalType::Symbol("quote".to_string()), ast]);
+    }
+
+    let mut list = ast.get_items();
+    let first = list.remove(0);
+    if first.is_symbol() && first.get_symbol_ref() == "unquote" {
+        return list.remove(0);
+    }
+
+    if is_pair(&first) {
+        let mut list_of_first = first.clone().get_items();
+        let first_of_first = list_of_first.remove(0);
+        if first_of_first.is_symbol() && first_of_first.get_symbol_ref() == "splice-unquote" {
+            let ret = vec![MalType::Symbol("concat".to_string()), list_of_first.remove(0), quasiquote(MalType::Vec(list))];
+            return MalType::List(ret);
+        }
+    }
+
+    let l = vec![MalType::Symbol("cons".to_string()), quasiquote(first), quasiquote(MalType::Vec(list))];
+
+    MalType::List(l)
+}
+
+pub fn is_pair(param: &MalType) -> bool {
+    param.is_collection() && param.get_items_ref().len() > 0
+}
+
 fn read(line: &str) -> Result<MalType, Error> {
     read_str(line)
 }
@@ -134,6 +163,14 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
                     }
 
                     unreachable!()
+                }
+                "quote" => {
+                    ensure!(list.len() == 1, "quote should have 1 param");
+                    return Ok(list.remove(0));
+                }
+                "quasiquote" => {
+                    mal = quasiquote(list.remove(0));
+                    continue;
                 }
                 "env" => {
                     println!("{:#?}", env);

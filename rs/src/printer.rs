@@ -64,26 +64,6 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
             s = s.trim().to_string();
             s.push_str("}");
         }
-        MalType::Quote(l) => {
-            s.push_str("(quote ");
-            s.push_str(&pr_str(l, print_readably));
-            s.push_str(")")
-        }
-        MalType::Quasiquote(l) => {
-            s.push_str("(quasiquote ");
-            s.push_str(&pr_str(l, print_readably));
-            s.push_str(")")
-        }
-        MalType::Unquote(l) => {
-            s.push_str("(unquote ");
-            s.push_str(&pr_str(l, print_readably));
-            s.push_str(")")
-        }
-        MalType::SpliceUnquote(l) => {
-            s.push_str("(splice-unquote ");
-            s.push_str(&pr_str(l, print_readably));
-            s.push_str(")")
-        }
         MalType::WithMeta(vector, hashmap) => {
             s.push_str("(with-meta ");
             s.push_str(&pr_str(vector, print_readably));

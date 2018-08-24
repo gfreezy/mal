@@ -151,22 +151,22 @@ fn read_hashmap(reader: &mut Reader) -> Result<MalType, Error> {
 
 fn read_quote(reader: &mut Reader) -> Result<MalType, Error> {
     reader.next();
-    Ok(MalType::Quote(Box::new(read_form(reader)?)))
+    return Ok(MalType::List(vec![MalType::Symbol("quote".to_string()), read_form(reader)?]));
 }
 
 fn read_quasiquote(reader: &mut Reader) -> Result<MalType, Error> {
     reader.next();
-    Ok(MalType::Quasiquote(Box::new(read_form(reader)?)))
+    return Ok(MalType::List(vec![MalType::Symbol("quasiquote".to_string()), read_form(reader)?]));
 }
 
 fn read_unquote(reader: &mut Reader) -> Result<MalType, Error> {
     reader.next();
-    Ok(MalType::Unquote(Box::new(read_form(reader)?)))
+    return Ok(MalType::List(vec![MalType::Symbol("unquote".to_string()), read_form(reader)?]));
 }
 
 fn read_splice_unquote(reader: &mut Reader) -> Result<MalType, Error> {
     reader.next();
-    Ok(MalType::SpliceUnquote(Box::new(read_form(reader)?)))
+    return Ok(MalType::List(vec![MalType::Symbol("splice-unquote".to_string()), read_form(reader)?]));
 }
 
 fn read_symbol(reader: &mut Reader) -> Result<MalType, Error> {

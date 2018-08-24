@@ -165,10 +165,25 @@ fn reset(mut params: Vec<MalType>) -> Result<MalType, Error> {
     ensure!(atom.is_atom(), "reset's first param should be of type atom");
     if let MalType::Atom(a) = atom {
         let _ = a.replace(new_value.clone());
-        return Ok(new_value)
+        return Ok(new_value);
     }
 
     unreachable!()
+}
+
+fn cons(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    ensure!(params.len() == 2, "cons should have 2 params");
+    let first = params.remove(0);
+    let list = params.remove(0);
+    ensure!(list.is_collection(), "cons' second param should be list");
+    let mut l = list.get_items();
+    l.insert(0, first);
+    Ok(MalType::List(l))
+}
+
+fn concat(params: Vec<MalType>) -> Result<MalType, Error> {
+    ensure!(params.iter().all(|el| el.is_collection()), "concat's all params should be list");
+    Ok(MalType::List(params.into_iter().map(|mal| mal.get_items()).collect::<Vec<Vec<MalType>>>().concat()))
 }
 
 pub struct Ns {
@@ -201,7 +216,8 @@ impl Ns {
         map.insert("atom?".to_string(), is_atom);
         map.insert("deref".to_string(), deref);
         map.insert("reset!".to_string(), reset);
-//        map.insert("swap!".to_string(), swap);
+        map.insert("cons".to_string(), cons);
+        map.insert("concat".to_string(), concat);
 
         Ns {
             map
