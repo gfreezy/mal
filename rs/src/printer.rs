@@ -36,7 +36,6 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
                 s.push('"');
             }
         }
-        MalType::Deref(k) => s.push_str(&format!("(deref {})", k)),
         MalType::Num(num) => s.push_str(&format!("{}", num)),
         MalType::List(list) => {
             s.push_str("(");
@@ -94,6 +93,11 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
         }
         MalType::Func(..) => {
             s.push_str("#<function>");
+        },
+        MalType::Atom(atom) => {
+            s.push_str("(atom ");
+            s.push_str(&pr_str(&atom.borrow(), print_readably));
+            s.push_str(")")
         }
         MalType::Closure(..) => {
 //            s.push_str(&format!("{:#?}", c));

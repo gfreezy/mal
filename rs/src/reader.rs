@@ -1,6 +1,7 @@
 use failure::Error;
 use regex::Regex;
 use types::MalType;
+use error::CommentFoundError;
 
 struct Reader {
     tokens: Vec<String>,
@@ -43,7 +44,7 @@ fn tokenizer(s: &str) -> Vec<String> {
     for cap in RE.captures_iter(s) {
         caps.push(cap[1].to_string());
     }
-    //    println!("{:?}", caps);
+//    println!("{:?}", caps);
     caps
 }
 
@@ -69,7 +70,10 @@ fn read_form(reader: &mut Reader) -> Result<MalType, Error> {
             Some('"') => return read_string(reader),
             Some('^') => return read_with_meta(reader),
             Some('@') => return read_deref(reader),
-            Some(_) => return read_atom(reader),
+            Some(';') => {
+                return Err(CommentFoundError.into())
+            },
+            Some(_) => return read_symbol(reader),
         }
     } else {
         bail!("no token available")
@@ -88,7 +92,13 @@ fn read_list(reader: &mut Reader) -> Result<MalType, Error> {
         if c == ")" {
             return Ok(MalType::List(ret));
         }
-        let type_ = read_form(reader)?;
+        let type_ = match read_form(reader) {
+            Ok(t) => t,
+            Err(e) => {
+                let _ = e.downcast::<CommentFoundError>()?;
+                continue;
+            }
+        };
         ret.push(type_);
     }
 }
@@ -105,7 +115,13 @@ fn read_vec(reader: &mut Reader) -> Result<MalType, Error> {
         if c == "]" {
             return Ok(MalType::Vec(ret));
         }
-        let type_ = read_form(reader)?;
+        let type_ = match read_form(reader) {
+            Ok(t) => t,
+            Err(e) => {
+                let _ = e.downcast::<CommentFoundError>()?;
+                continue;
+            }
+        };
         ret.push(type_);
     }
 }
@@ -116,13 +132,19 @@ fn read_hashmap(reader: &mut Reader) -> Result<MalType, Error> {
         reader.next();
 
         let c = match reader.peek() {
-            None => bail!("expected '}'"),
+            None => bail!("expected '}}'"),
             Some(t) => t,
         };
         if c == "}" {
             return Ok(MalType::Hashmap(ret));
         }
-        let type_ = read_form(reader)?;
+        let type_ = match read_form(reader) {
+            Ok(t) => t,
+            Err(e) => {
+                let _ = e.downcast::<CommentFoundError>()?;
+                continue;
+            }
+        };
         ret.push(type_);
     }
 }
@@ -147,7 +169,7 @@ fn read_splice_unquote(reader: &mut Reader) -> Result<MalType, Error> {
     Ok(MalType::SpliceUnquote(Box::new(read_form(reader)?)))
 }
 
-fn read_atom(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_symbol(reader: &mut Reader) -> Result<MalType, Error> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
@@ -231,7 +253,7 @@ fn read_deref(reader: &mut Reader) -> Result<MalType, Error> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
-            return Ok(MalType::Deref(token.to_owned()));
+            return Ok(MalType::List(vec![MalType::Symbol("deref".to_string()), MalType::Symbol(token.to_string())]));
         }
     }
 }

@@ -5,6 +5,8 @@ use printer::pr_str;
 use reader::read_str;
 use std::fs::File;
 use std::io::Read;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 
 fn add(mut params: Vec<MalType>) -> Result<MalType, Error> {
@@ -139,6 +141,35 @@ fn slurp(mut params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::String(content))
 }
 
+fn atom(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    ensure!(params.len() == 1, "atom should have 1 params");
+    Ok(MalType::Atom(Rc::new(RefCell::new(params.remove(0)))))
+}
+
+fn is_atom(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    ensure!(params.len() == 1, "is_atom should have 1 params");
+    Ok(MalType::Bool(params.remove(0).is_atom()))
+}
+
+fn deref(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    ensure!(params.len() == 1, "deref should have 1 params");
+    let p = params.remove(0);
+    ensure!(p.is_atom(), "deref should have 1 param which is of type atom");
+    Ok(p.get_atom())
+}
+
+fn reset(mut params: Vec<MalType>) -> Result<MalType, Error> {
+    ensure!(params.len() == 2, "reset should have 2 params");
+    let atom = params.remove(0);
+    let new_value = params.remove(0);
+    ensure!(atom.is_atom(), "reset's first param should be of type atom");
+    if let MalType::Atom(a) = atom {
+        let _ = a.replace(new_value.clone());
+        return Ok(new_value)
+    }
+
+    unreachable!()
+}
 
 pub struct Ns {
     pub map: HashMap<String, CoreFunc>
@@ -166,6 +197,11 @@ impl Ns {
         map.insert(">=".to_string(), greater_than_equal);
         map.insert("read-string".to_string(), read_string);
         map.insert("slurp".to_string(), slurp);
+        map.insert("atom".to_string(), atom);
+        map.insert("atom?".to_string(), is_atom);
+        map.insert("deref".to_string(), deref);
+        map.insert("reset!".to_string(), reset);
+//        map.insert("swap!".to_string(), swap);
 
         Ns {
             map

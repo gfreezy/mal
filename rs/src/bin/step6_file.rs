@@ -16,6 +16,8 @@ use rs::reader::read_str;
 use rs::types::Closure;
 use rs::types::MalType;
 use rustyline::Editor;
+use std::env;
+use rs::error::CommentFoundError;
 use rustyline::error::ReadlineError;
 
 
@@ -104,7 +106,35 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
                     let ret = eval(list.remove(0), env.clone())?;
                     return eval(ret, env.root());
                 }
+                "swap!" => {
+                    let mut params: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Result<Vec<MalType>, Error>>()?;
+                    ensure!(params.len() >= 2, "swap! should have more than 2 params");
+                    let atom = params.remove(0);
+                    let func = params.remove(0);
+                    ensure!(atom.is_atom(), "swap!'s first param should be of type atom");
+                    ensure!(func.is_closure() || func.is_func(), "swap!'s second param should be a func");
+
+                    let old_mal = atom.get_atom();
+                    params.insert(0, old_mal);
+                    if let MalType::Atom(a) = atom {
+                        let new_mal = if func.is_closure() {
+                            let mut exec_mal = vec![func];
+                            exec_mal.extend(params);
+                            eval(MalType::List(exec_mal), env.clone())?
+                        } else if func.is_func() {
+                            let f = func.get_func();
+                            f(params)?
+                        } else {
+                            unreachable!();
+                        };
+                        let _ = a.replace(new_mal.clone());
+                        return Ok(new_mal);
+                    }
+
+                    unreachable!()
+                }
                 "env" => {
+                    println!("{:#?}", env);
                     return Ok(MalType::Nil);
                 }
                 _ => {}
@@ -152,7 +182,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
                     remind
                 ))
             }
-        }
+        };
     }
 }
 
@@ -202,11 +232,6 @@ fn rep(s: &str, env: Env) -> Result<String, Error> {
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 
-    let mut rl = Editor::<()>::new();
-    if rl.load_history(HIST_PATH).is_err() {
-        println!("No previous history.")
-    }
-
     let ns = Ns::new();
     let mut repl_env = Env::new(None, Vec::new(), Vec::new());
     for (k, v) in ns.map {
@@ -216,25 +241,59 @@ fn main() -> Result<(), Error> {
     let _ = eval(read("(def! not (fn* (a) (if a false true)))")?, repl_env.clone())?;
     let _ = eval(read(r#"(def! load-file (fn* (f) (eval (read-string (str "(do " (slurp f) ")")))))"#)?, repl_env.clone())?;
 
-    loop {
-        let line = rl.readline("user> ");
-        match line {
-            Ok(line) => {
-                rl.add_history_entry(line.as_ref());
-                match rep(line.as_ref(), repl_env.clone()) {
-                    Ok(s) => println!("{}", s),
-                    Err(e) => println!("{}", e),
-                }
-            }
-            Err(ReadlineError::Eof) | Err(ReadlineError::Interrupted) => {
-                break;
-            }
-            Err(err) => {
-                return Err(err.into());
-            }
-        }
+    let mut args: Vec<String> = env::args().collect();
+    let _self_name = args.remove(0);
+
+    let mut filename = None;
+    if args.len() > 0 {
+        filename = Some(args.remove(0));
+        repl_env.set("*ARGV*".to_string(), MalType::List(args.into_iter().map(|e| MalType::String(e)).collect()));
+    } else {
+        repl_env.set("*ARGV*".to_string(), MalType::List(Vec::new()));
     }
 
-    rl.save_history(HIST_PATH)?;
+    match filename {
+        Some(filename) => {
+            let _ = rep(format!(r#"(load-file "{}")"#, filename).as_ref(), repl_env)?;
+        }
+        None => {
+            let mut rl = Editor::<()>::new();
+            if rl.load_history(HIST_PATH).is_err() {
+                println!("No previous history.")
+            }
+            loop {
+                let line = rl.readline("user> ");
+                match line {
+                    Ok(line) => {
+                        rl.add_history_entry(line.as_ref());
+                        match rep(line.as_ref(), repl_env.clone()) {
+                            Ok(s) => println!("{}", s),
+                            Err(e) => {
+                                let downcast = e.downcast::<CommentFoundError>();
+                                match downcast {
+                                    Ok(_e) => {
+                                        continue;
+                                    }
+                                    Err(e) => {
+                                        println!("{}", e)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(ReadlineError::Eof) | Err(ReadlineError::Interrupted) => {
+                        break;
+                    }
+                    Err(err) => {
+                        println!("no comment");
+                        return Err(err.into());
+                    }
+                }
+            }
+
+            rl.save_history(HIST_PATH)?;
+        }
+    };
+
     Ok(())
 }

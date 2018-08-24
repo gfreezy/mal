@@ -1,5 +1,7 @@
 use env::Env;
 use failure::Error;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 
 pub type CoreFunc = fn(Vec<MalType>) -> Result<MalType, Error>;
@@ -18,12 +20,13 @@ pub enum MalType {
     Unquote(Box<MalType>),
     SpliceUnquote(Box<MalType>),
     WithMeta(Box<MalType>, Box<MalType>),
-    Deref(String),
     Nil,
     Bool(bool),
 
+    Atom(Rc<RefCell<MalType>>),
     Func(CoreFunc),
     Closure(Box<Closure>),
+
 }
 
 #[derive(DebugStub, Clone, PartialEq)]
@@ -87,6 +90,20 @@ impl MalType {
             MalType::Num(n) => n,
             _ => unreachable!()
         }
+    }
+
+    pub fn get_atom(&self) -> MalType {
+        match *self {
+            MalType::Atom(ref mal) => mal.borrow().clone(),
+            _ => unreachable!()
+        }
+    }
+
+    pub fn is_atom(&self) -> bool {
+        if let &MalType::Atom(_) = self {
+            return true;
+        }
+        return false;
     }
 
     pub fn is_symbol(&self) -> bool {
