@@ -14,3 +14,5 @@ step6_file:
 	cargo build
 step7_quote:
 	cargo build
+step8_macros:
+	cargo build

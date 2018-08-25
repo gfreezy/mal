@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use types::{MalType, CoreFunc};
-use failure::Error;
+use failure::Fallible;
 use printer::pr_str;
 use reader::read_str;
 use std::fs::File;
@@ -9,63 +9,63 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 
-fn add(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn add(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "add should have 2 params");
     Ok(MalType::Num(params.remove(0).get_number() + params.remove(0).get_number()))
 }
 
-fn minus(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn minus(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "minus should have 2 params");
     Ok(MalType::Num(params.remove(0).get_number() - params.remove(0).get_number()))
 }
 
 
-fn multiply(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn multiply(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "multiply should have 2 params");
     Ok(MalType::Num(params.remove(0).get_number() * params.remove(0).get_number()))
 }
 
 
-fn divide(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn divide(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "divide should have 2 params");
     Ok(MalType::Num(params.remove(0).get_number() / params.remove(0).get_number()))
 }
 
-fn prn(params: Vec<MalType>) -> Result<MalType, Error> {
+fn prn(params: Vec<MalType>) -> Fallible<MalType> {
     println!("{}", pr_str2(params)?.get_string());
     Ok(MalType::Nil)
 }
 
-fn pr_str2(params: Vec<MalType>) -> Result<MalType, Error> {
+fn pr_str2(params: Vec<MalType>) -> Fallible<MalType> {
     Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, true)).collect::<Vec<String>>().join(" ")))
 }
 
-fn str2(params: Vec<MalType>) -> Result<MalType, Error> {
+fn str2(params: Vec<MalType>) -> Fallible<MalType> {
     Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, false)).collect::<Vec<String>>().join("")))
 }
 
-fn println2(params: Vec<MalType>) -> Result<MalType, Error> {
+fn println2(params: Vec<MalType>) -> Fallible<MalType> {
     println!("{}", params.into_iter().map(|p| pr_str(&p, false)).collect::<Vec<String>>().join(" "));
     Ok(MalType::Nil)
 }
 
 #[allow(unused_mut)]
-fn list(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn list(mut params: Vec<MalType>) -> Fallible<MalType> {
     Ok(MalType::List(params))
 }
 
 
-fn is_list(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn is_list(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "list? should have 1 params");
     Ok(MalType::Bool(params.remove(0).is_list()))
 }
 
-fn is_empty(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn is_empty(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "empty? should have 1 params");
     Ok(MalType::Bool(params.remove(0).is_empty_collection()))
 }
 
-fn count(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn count(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "count should have 1 params");
     let param = params.remove(0);
     if param.is_nil() {
@@ -75,7 +75,7 @@ fn count(mut params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::Num(param.get_items().len() as f64))
 }
 
-fn equal(params: Vec<MalType>) -> Result<MalType, Error> {
+fn equal(params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "= should have 2 params");
     Ok(MalType::Bool(eq(params)))
 }
@@ -96,42 +96,42 @@ fn eq(mut params: Vec<MalType>) -> bool {
     }
 }
 
-fn less_than(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn less_than(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "< should have 2 params");
     let left = params.remove(0);
     let right = params.remove(0);
     Ok(MalType::Bool(left.get_number() < right.get_number()))
 }
 
-fn less_than_equal(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn less_than_equal(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "<= should have 2 params");
     let left = params.remove(0);
     let right = params.remove(0);
     Ok(MalType::Bool(left.get_number() <= right.get_number()))
 }
 
-fn greater_than(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn greater_than(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "> should have 2 params");
     let left = params.remove(0);
     let right = params.remove(0);
     Ok(MalType::Bool(left.get_number() > right.get_number()))
 }
 
-fn greater_than_equal(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn greater_than_equal(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, ">= should have 2 params");
     let left = params.remove(0);
     let right = params.remove(0);
     Ok(MalType::Bool(left.get_number() >= right.get_number()))
 }
 
-fn read_string(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn read_string(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "read_string should have 1 params");
     let p = params.remove(0);
     let s = p.get_string();
     read_str(&s)
 }
 
-fn slurp(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn slurp(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "slurp should have 1 params");
     let p = params.remove(0);
     let file_name = p.get_string();
@@ -141,24 +141,24 @@ fn slurp(mut params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::String(content))
 }
 
-fn atom(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn atom(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "atom should have 1 params");
     Ok(MalType::Atom(Rc::new(RefCell::new(params.remove(0)))))
 }
 
-fn is_atom(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn is_atom(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "is_atom should have 1 params");
     Ok(MalType::Bool(params.remove(0).is_atom()))
 }
 
-fn deref(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn deref(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "deref should have 1 params");
     let p = params.remove(0);
     ensure!(p.is_atom(), "deref should have 1 param which is of type atom");
     Ok(p.get_atom())
 }
 
-fn reset(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn reset(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "reset should have 2 params");
     let atom = params.remove(0);
     let new_value = params.remove(0);
@@ -171,7 +171,7 @@ fn reset(mut params: Vec<MalType>) -> Result<MalType, Error> {
     unreachable!()
 }
 
-fn cons(mut params: Vec<MalType>) -> Result<MalType, Error> {
+fn cons(mut params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "cons should have 2 params");
     let first = params.remove(0);
     let list = params.remove(0);
@@ -181,9 +181,46 @@ fn cons(mut params: Vec<MalType>) -> Result<MalType, Error> {
     Ok(MalType::List(l))
 }
 
-fn concat(params: Vec<MalType>) -> Result<MalType, Error> {
+fn concat(params: Vec<MalType>) -> Fallible<MalType> {
     ensure!(params.iter().all(|el| el.is_collection()), "concat's all params should be list");
     Ok(MalType::List(params.into_iter().map(|mal| mal.get_items()).collect::<Vec<Vec<MalType>>>().concat()))
+}
+
+fn nth(mut params: Vec<MalType>) -> Fallible<MalType> {
+    ensure!(params.len() == 2, "nth should have 2 params");
+    let list = params.remove(0);
+    let index_mal = params.remove(0);
+    ensure!(index_mal.is_num(), "nth's first param should be num");
+    let float_index =  index_mal.get_number();
+    ensure!(float_index.trunc() == float_index, "nth index should be int");
+    let index = float_index.trunc() as usize;
+    ensure!(list.is_collection(), "nth's second param should be list");
+    let mut l = list.get_items();
+    ensure!(l.len() > index, "nth no enough items in list");
+    return Ok(l.remove(index))
+}
+
+fn first(mut params: Vec<MalType>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "first should have 1 params");
+    let list = params.remove(0);
+    if list.is_nil() || list.is_empty_collection() {
+        return Ok(MalType::Nil);
+    }
+    ensure!(list.is_collection(), "first's param should be list or nil");
+    let mut l = list.get_items();
+    return Ok(l.remove(0))
+}
+
+fn rest(mut params: Vec<MalType>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "rest should have 1 params");
+    let list = params.remove(0);
+    if list.is_nil() || list.is_empty_collection() {
+        return Ok(MalType::List(Vec::new()));
+    }
+    ensure!(list.is_collection(), "rest's param should be list or nil");
+    let mut l = list.get_items();
+    l.remove(0);
+    return Ok(MalType::List(l))
 }
 
 pub struct Ns {
@@ -218,6 +255,9 @@ impl Ns {
         map.insert("reset!".to_string(), reset);
         map.insert("cons".to_string(), cons);
         map.insert("concat".to_string(), concat);
+        map.insert("nth".to_string(), nth);
+        map.insert("first".to_string(), first);
+        map.insert("rest".to_string(), rest);
 
         Ns {
             map

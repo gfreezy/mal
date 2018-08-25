@@ -1,7 +1,7 @@
 extern crate failure;
 extern crate rustyline;
 
-use failure::Error;
+use failure::Fallible;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
@@ -23,7 +23,7 @@ fn rep(s: &str) -> &str {
 
 const HIST_PATH: &str = ".mal-history";
 
-fn main() -> Result<(), Error> {
+fn main() -> Fallible<()> {
     let mut rl = Editor::<()>::new();
     if rl.load_history(HIST_PATH).is_err() {
         println!("No previous history.")

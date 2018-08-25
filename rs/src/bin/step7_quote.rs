@@ -8,7 +8,7 @@ extern crate pretty_env_logger;
 extern crate rs;
 extern crate rustyline;
 
-use failure::Error;
+use failure::Fallible;
 use rs::core::Ns;
 use rs::env::Env;
 use rs::printer::pr_str;
@@ -53,11 +53,11 @@ pub fn is_pair(param: &MalType) -> bool {
     param.is_collection() && param.get_items_ref().len() > 0
 }
 
-fn read(line: &str) -> Result<MalType, Error> {
+fn read(line: &str) -> Fallible<MalType> {
     read_str(line)
 }
 
-fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
+fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
     loop {
         if !mal.is_list() || mal.is_empty_list() {
             return eval_ast(mal, env.clone());
@@ -124,11 +124,11 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
                 }
                 "fn*" => {
                     ensure!(list.len() == 2, "fn* should have 2 params");
-                    return Ok(MalType::Closure(Box::new(Closure {
-                        env: env.clone(),
-                        parameters: list.remove(0),
-                        body: list.remove(0),
-                    })));
+                    return Ok(MalType::Closure(Box::new(Closure::new(
+                        list.remove(0),
+                        list.remove(0),
+                        env.clone()
+                    ))));
                 }
                 "eval" => {
                     ensure!(list.len() == 1, "eval should have 1 params");
@@ -138,7 +138,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
                     continue;
                 }
                 "swap!" => {
-                    let mut params: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Result<Vec<MalType>, Error>>()?;
+                    let mut params: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?;
                     ensure!(params.len() >= 2, "swap! should have more than 2 params");
                     let atom = params.remove(0);
                     let func = params.remove(0);
@@ -183,7 +183,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
         let new_first_mal = eval(first_mal, env.clone())?;
         return match new_first_mal {
             MalType::Func(func) => {
-                let params = list.into_iter().map(|el| eval(el, env.clone())).collect::<Result<Vec<MalType>, Error>>()?;
+                let params = list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?;
                 func(params)
             }
             MalType::Closure(closure) => {
@@ -198,7 +198,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
 
                     // drop "&"
                     binds.remove(idx);
-                    let mut exprs: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Result<Vec<MalType>, Error>>()?;
+                    let mut exprs: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?;
                     let positioned_args: Vec<MalType> = exprs.drain(0..idx).collect();
                     let varargs = exprs;
                     let mut exprs = positioned_args;
@@ -206,7 +206,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
                     Env::new(Some(closure.env), binds, exprs)
                 } else {
                     ensure!(list.len() == binds.len(), "closure arguments not match params");
-                    let exprs = list.into_iter().map(|el| eval(el, env.clone())).collect::<Result<Vec<MalType>, Error>>()?;
+                    let exprs = list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?;
                     Env::new(Some(closure.env), binds, exprs)
                 };
 
@@ -221,13 +221,13 @@ fn eval(mut mal: MalType, mut env: Env) -> Result<MalType, Error> {
     }
 }
 
-fn eval_ast(ast: MalType, env: Env) -> Result<MalType, Error> {
+fn eval_ast(ast: MalType, env: Env) -> Fallible<MalType> {
     match ast {
         MalType::Symbol(s) => {
             return env.get(&s).map_or(Err(format_err!("'{}' not found", s)), |f| Ok(f.clone()));
         }
-        MalType::List(list) => return Ok(MalType::List(list.into_iter().map(|el| eval(el, env.clone())).collect::<Result<Vec<MalType>, Error>>()?)),
-        MalType::Vec(list) => return Ok(MalType::Vec(list.into_iter().map(|el| eval(el, env.clone())).collect::<Result<Vec<MalType>, Error>>()?)),
+        MalType::List(list) => return Ok(MalType::List(list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?)),
+        MalType::Vec(list) => return Ok(MalType::Vec(list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?)),
         MalType::Hashmap(list) => {
             let (keys, values): (Vec<(usize, MalType)>, Vec<(usize, MalType)>) =
                 list.into_iter()
@@ -238,7 +238,7 @@ fn eval_ast(ast: MalType, env: Env) -> Result<MalType, Error> {
             let new_values: Vec<MalType> =
                 values.into_iter()
                     .map(|(_, el)| eval(el, env.clone()))
-                    .collect::<Result<Vec<MalType>, Error>>()?;
+                    .collect::<Fallible<Vec<MalType>>>()?;
 
             let new_hashmap: Vec<MalType> =
                 keys.into_iter()
@@ -258,13 +258,13 @@ fn print(s: &MalType) -> String {
     pr_str(s, true)
 }
 
-fn rep(s: &str, env: Env) -> Result<String, Error> {
+fn rep(s: &str, env: Env) -> Fallible<String> {
     let ret = Ok(print(&eval(read(s)?, env.clone())?));
 //    println!("env: {}", env);
     return ret;
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Fallible<()> {
     pretty_env_logger::init();
 
     let ns = Ns::new();

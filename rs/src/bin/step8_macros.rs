@@ -23,6 +23,80 @@ use rustyline::error::ReadlineError;
 
 const HIST_PATH: &str = ".mal-history";
 
+fn apply_closure(closure: Closure, mut args: Vec<MalType>) -> Fallible<MalType> {
+    let params = closure.parameters.get_items();
+    let mut binds: Vec<String> = params.into_iter().map(|mal| mal.get_symbol()).collect();
+
+    let idx = binds.iter().position(|e| *e == "&");
+
+    let new_env = if let Some(idx) = idx {
+        ensure!(binds.len() == idx + 2, "& must be followed by a param name");
+        ensure!(args.len() >= idx, "closure arguments not match params");
+
+        // drop "&"
+        binds.remove(idx);
+        let positioned_args: Vec<MalType> = args.drain(0..idx).collect();
+        let varargs = args;
+        let mut exprs = positioned_args;
+        exprs.push(MalType::List(varargs));
+        Env::new(Some(closure.env), binds, exprs)
+    } else {
+        ensure!(args.len() == binds.len(), "closure arguments not match params");
+        Env::new(Some(closure.env), binds, args)
+    };
+
+    eval(closure.body, new_env)
+}
+
+
+fn quasiquote(ast: MalType) -> MalType {
+    if !is_pair(&ast) {
+        return MalType::List(vec![MalType::Symbol("quote".to_string()), ast]);
+    }
+
+    let mut list = ast.get_items();
+    let first = list.remove(0);
+    if first.is_symbol() && first.get_symbol_ref() == "unquote" {
+        return list.remove(0);
+    }
+
+    if is_pair(&first) {
+        let mut list_of_first = first.clone().get_items();
+        let first_of_first = list_of_first.remove(0);
+        if first_of_first.is_symbol() && first_of_first.get_symbol_ref() == "splice-unquote" {
+            let ret = vec![MalType::Symbol("concat".to_string()), list_of_first.remove(0), quasiquote(MalType::Vec(list))];
+            return MalType::List(ret);
+        }
+    }
+
+    let l = vec![MalType::Symbol("cons".to_string()), quasiquote(first), quasiquote(MalType::Vec(list))];
+
+    MalType::List(l)
+}
+
+fn is_pair(param: &MalType) -> bool {
+    param.is_collection() && param.get_items_ref().len() > 0
+}
+
+fn is_macro_call(ast: &MalType, env: Env) -> bool {
+    if ast.did_collection_have_leading_symbol() {
+        let items = ast.get_items_ref();
+        let symbol = env.get(items[0].get_symbol_ref());
+        return symbol.map(|f| f.is_closure() && f.is_macro_closure()) == Some(true);
+    }
+
+    false
+}
+
+fn macroexpand(mut ast: MalType, env: Env) -> Fallible<MalType> {
+    while is_macro_call(&ast, env.clone()) {
+        let mut items = ast.get_items();
+        let first_el = items.remove(0);
+        let func = env.get(first_el.get_symbol_ref()).expect("get macro func");
+        ast = apply_closure(func.get_closure(), items)?;
+    }
+    Ok(ast)
+}
 
 fn read(line: &str) -> Fallible<MalType> {
     read_str(line)
@@ -34,8 +108,14 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
             return eval_ast(mal, env.clone());
         }
 
+        mal = macroexpand(mal, env.clone())?;
+        if !mal.is_list() || mal.is_empty_list() {
+            return eval_ast(mal, env.clone());
+        }
+
         let mut list = mal.get_items();
         let first_mal = list.remove(0);
+
 
         if first_mal.is_symbol() {
             match first_mal.get_symbol_ref().as_ref() {
@@ -98,8 +178,8 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     return Ok(MalType::Closure(Box::new(Closure::new(
                         list.remove(0),
                         list.remove(0),
-                        env.clone()
-                    ))));
+                        env.clone(),
+                        ))));
                 }
                 "eval" => {
                     ensure!(list.len() == 1, "eval should have 1 params");
@@ -135,6 +215,25 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
 
                     unreachable!()
                 }
+                "quote" => {
+                    ensure!(list.len() == 1, "quote should have 1 param");
+                    return Ok(list.remove(0));
+                }
+                "quasiquote" => {
+                    mal = quasiquote(list.remove(0));
+                    continue;
+                }
+                "defmacro!" => {
+                    ensure!(list.len() == 2, "defmacro! should have 2 params");
+                    let symbol_key = list.remove(0).get_symbol();
+                    let mut value = eval(list.remove(0), env.clone())?;
+                    ensure!(value.is_closure(), "defmacro!'s second param should evaluate to func");
+                    value.set_is_macro();
+                    return Ok(env.set(symbol_key, value));
+                }
+                "macroexpand" => {
+                    return macroexpand(list.remove(0), env.clone());
+                }
                 "env" => {
                     println!("{:#?}", env);
                     return Ok(MalType::Nil);
@@ -150,32 +249,8 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                 func(params)
             }
             MalType::Closure(closure) => {
-                let params = closure.parameters.get_items();
-                let mut binds: Vec<String> = params.into_iter().map(|mal| mal.get_symbol()).collect();
-
-                let idx = binds.iter().position(|e| *e == "&");
-
-                let new_env = if let Some(idx) = idx {
-                    ensure!(binds.len() == idx + 2, "& must be followed by a param name");
-                    ensure!(list.len() >= idx, "closure arguments not match params");
-
-                    // drop "&"
-                    binds.remove(idx);
-                    let mut exprs: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?;
-                    let positioned_args: Vec<MalType> = exprs.drain(0..idx).collect();
-                    let varargs = exprs;
-                    let mut exprs = positioned_args;
-                    exprs.push(MalType::List(varargs));
-                    Env::new(Some(closure.env), binds, exprs)
-                } else {
-                    ensure!(list.len() == binds.len(), "closure arguments not match params");
-                    let exprs = list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?;
-                    Env::new(Some(closure.env), binds, exprs)
-                };
-
-                mal = closure.body;
-                env = new_env;
-                continue;
+                let exprs: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?;
+                apply_closure(*closure, exprs)
             }
             _ => {
                 bail!("{:?} is not a function", new_first_mal)
@@ -236,8 +311,10 @@ fn main() -> Fallible<()> {
         repl_env.set(k, MalType::Func(v));
     }
 
-    let _ = eval(read("(def! not (fn* (a) (if a false true)))")?, repl_env.clone())?;
-    let _ = eval(read(r#"(def! load-file (fn* (f) (eval (read-string (str "(do " (slurp f) ")")))))"#)?, repl_env.clone())?;
+    let _ = rep("(def! not (fn* (a) (if a false true)))", repl_env.clone())?;
+    let _ = rep(r#"(def! load-file (fn* (f) (eval (read-string (str "(do " (slurp f) ")")))))"#, repl_env.clone())?;
+    let _ = rep(r#"(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw "odd number of forms to cond")) (cons 'cond (rest (rest xs)))))))"#, repl_env.clone())?;
+    let _ = rep(r#"(defmacro! or (fn* (& xs) (if (empty? xs) nil (if (= 1 (count xs)) (first xs) `(let* (or_FIXME ~(first xs)) (if or_FIXME or_FIXME (or ~@(rest xs))))))))"#, repl_env.clone())?;
 
     let mut args: Vec<String> = env::args().collect();
     let _self_name = args.remove(0);

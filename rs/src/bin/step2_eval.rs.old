@@ -33,11 +33,11 @@ fn divide(a: f64, b: f64) -> f64 {
 }
 
 
-fn read(line: &str) -> Result<MalType, Error> {
+fn read(line: &str) -> Fallible<MalType> {
     read_str(line)
 }
 
-fn eval(s: MalType, env: &ReplEnv) -> Result<MalType, Error> {
+fn eval(s: MalType, env: &ReplEnv) -> Fallible<MalType> {
     let new_mal = eval_ast(s, env)?;
     if !new_mal.did_collection_have_leading_func() {
         return Ok(new_mal);
@@ -55,7 +55,7 @@ fn print(s: &MalType) -> String {
     pr_str(s)
 }
 
-fn rep(s: &str) -> Result<String, Error> {
+fn rep(s: &str) -> Fallible<String> {
     let repl_env = {
         let mut map: ReplEnv = HashMap::new();
         map.insert("+".to_string(), add);
@@ -67,11 +67,11 @@ fn rep(s: &str) -> Result<String, Error> {
     Ok(print(&eval(read(s)?, &repl_env)?))
 }
 
-fn eval_ast(ast: MalType, env: &ReplEnv) -> Result<MalType, Error> {
+fn eval_ast(ast: MalType, env: &ReplEnv) -> Fallible<MalType> {
     match ast {
         MalType::Symbol(s) => return env.get(&s).map_or(Err(format_err!("'{}' not found", s)), |f| Ok(MalType::Func(f.clone()))),
-        MalType::List(list) => return Ok(MalType::List(list.into_iter().map(|el| eval(el, env)).collect::<Result<Vec<MalType>, Error>>()?)),
-        MalType::Vec(list) => return Ok(MalType::Vec(list.into_iter().map(|el| eval(el, env)).collect::<Result<Vec<MalType>, Error>>()?)),
+        MalType::List(list) => return Ok(MalType::List(list.into_iter().map(|el| eval(el, env)).collect::<Fallible<Vec<MalType>>>()?)),
+        MalType::Vec(list) => return Ok(MalType::Vec(list.into_iter().map(|el| eval(el, env)).collect::<Fallible<Vec<MalType>>>()?)),
         MalType::Hashmap(list) => {
             let (keys, values): (Vec<(usize, MalType)>, Vec<(usize, MalType)>) =
                 list.into_iter()
@@ -82,7 +82,7 @@ fn eval_ast(ast: MalType, env: &ReplEnv) -> Result<MalType, Error> {
             let new_values: Vec<MalType> =
                 values.into_iter()
                     .map(|(_, el)| eval(el, env))
-                    .collect::<Result<Vec<MalType>, Error>>()?;
+                    .collect::<Fallible<Vec<MalType>>>()?;
 
             let new_hashmap: Vec<MalType> =
                 keys.into_iter()
@@ -97,7 +97,7 @@ fn eval_ast(ast: MalType, env: &ReplEnv) -> Result<MalType, Error> {
     }
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Fallible<()> {
     let mut rl = Editor::<()>::new();
     if rl.load_history(HIST_PATH).is_err() {
         println!("No previous history.")

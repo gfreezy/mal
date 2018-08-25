@@ -80,7 +80,6 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
             s.push_str(")")
         }
         MalType::Closure(..) => {
-//            s.push_str(&format!("{:#?}", c));
             s.push_str("#<function>");
         }
     }

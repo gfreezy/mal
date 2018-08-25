@@ -31,11 +31,11 @@ fn divide(a: f64, b: f64) -> f64 {
 }
 
 
-fn read(line: &str) -> Result<MalType, Error> {
+fn read(line: &str) -> Fallible<MalType> {
     read_str(line)
 }
 
-fn eval(mal: MalType, env: &mut Env) -> Result<MalType, Error> {
+fn eval(mal: MalType, env: &mut Env) -> Fallible<MalType> {
     let first_symbol = mal.get_first_symbol();
     if first_symbol.is_none() {
         return eval_ast(mal, env);
@@ -78,17 +78,17 @@ fn print(s: &MalType) -> String {
     pr_str(s)
 }
 
-fn rep(s: &str, env: &mut Env) -> Result<String, Error> {
+fn rep(s: &str, env: &mut Env) -> Fallible<String> {
     Ok(print(&eval(read(s)?, env)?))
 }
 
-fn eval_ast(ast: MalType, env: &mut Env) -> Result<MalType, Error> {
+fn eval_ast(ast: MalType, env: &mut Env) -> Fallible<MalType> {
     match ast {
         MalType::Symbol(s) => {
             return env.get(&s).map_or(Err(format_err!("'{}' not found", s)), |f| Ok(f.clone()));
         }
-        MalType::List(list) => return Ok(MalType::List(list.into_iter().map(|el| eval(el, env)).collect::<Result<Vec<MalType>, Error>>()?)),
-        MalType::Vec(list) => return Ok(MalType::Vec(list.into_iter().map(|el| eval(el, env)).collect::<Result<Vec<MalType>, Error>>()?)),
+        MalType::List(list) => return Ok(MalType::List(list.into_iter().map(|el| eval(el, env)).collect::<Fallible<Vec<MalType>>>()?)),
+        MalType::Vec(list) => return Ok(MalType::Vec(list.into_iter().map(|el| eval(el, env)).collect::<Fallible<Vec<MalType>>>()?)),
         MalType::Hashmap(list) => {
             let (keys, values): (Vec<(usize, MalType)>, Vec<(usize, MalType)>) =
                 list.into_iter()
@@ -99,7 +99,7 @@ fn eval_ast(ast: MalType, env: &mut Env) -> Result<MalType, Error> {
             let new_values: Vec<MalType> =
                 values.into_iter()
                     .map(|(_, el)| eval(el, env))
-                    .collect::<Result<Vec<MalType>, Error>>()?;
+                    .collect::<Fallible<Vec<MalType>>>()?;
 
             let new_hashmap: Vec<MalType> =
                 keys.into_iter()
@@ -114,7 +114,7 @@ fn eval_ast(ast: MalType, env: &mut Env) -> Result<MalType, Error> {
     }
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Fallible<()> {
     let mut rl = Editor::<()>::new();
     if rl.load_history(HIST_PATH).is_err() {
         println!("No previous history.")

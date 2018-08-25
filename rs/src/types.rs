@@ -1,10 +1,10 @@
 use env::Env;
-use failure::Error;
+use failure::Fallible;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 
-pub type CoreFunc = fn(Vec<MalType>) -> Result<MalType, Error>;
+pub type CoreFunc = fn(Vec<MalType>) -> Fallible<MalType>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MalType {
@@ -22,7 +22,6 @@ pub enum MalType {
     Atom(Rc<RefCell<MalType>>),
     Func(CoreFunc),
     Closure(Box<Closure>),
-
 }
 
 #[derive(DebugStub, Clone, PartialEq)]
@@ -30,7 +29,19 @@ pub struct Closure {
     pub parameters: MalType,
     pub body: MalType,
     #[debug_stub=".."]
-    pub env: Env
+    pub env: Env,
+    pub is_macro: bool,
+}
+
+impl Closure {
+    pub fn new(params: MalType, body: MalType, env: Env) -> Self {
+        Closure {
+            parameters: params,
+            body,
+            env,
+            is_macro: false
+        }
+    }
 }
 
 
@@ -38,6 +49,20 @@ impl MalType {
     pub fn get_func(self) -> CoreFunc {
         match self {
             MalType::Func(f) => f,
+            _ => unreachable!()
+        }
+    }
+
+    pub fn get_num(self) -> f64 {
+        match self {
+            MalType::Num(n) => n,
+            _ => unreachable!()
+        }
+    }
+
+    pub fn get_closure(self) -> Closure {
+        match self {
+            MalType::Closure(f) => *f,
             _ => unreachable!()
         }
     }
@@ -104,6 +129,13 @@ impl MalType {
 
     pub fn is_symbol(&self) -> bool {
         if let &MalType::Symbol(_) = self {
+            return true;
+        }
+        return false;
+    }
+
+    pub fn is_num(&self) -> bool {
+        if let &MalType::Num(_) = self {
             return true;
         }
         return false;
@@ -230,6 +262,24 @@ impl MalType {
                 } else {
                     None
                 }
+            }
+            _ => unreachable!()
+        }
+    }
+
+    pub fn set_is_macro(&mut self) {
+        match *self {
+            MalType::Closure(ref mut c) => {
+                c.is_macro = true
+            }
+            _ => unreachable!()
+        }
+    }
+
+    pub fn is_macro_closure(&self) -> bool {
+        match *self {
+            MalType::Closure(ref c) => {
+                c.is_macro
             }
             _ => unreachable!()
         }

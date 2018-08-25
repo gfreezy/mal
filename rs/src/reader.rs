@@ -1,4 +1,4 @@
-use failure::Error;
+use failure::Fallible;
 use regex::Regex;
 use types::MalType;
 use error::CommentFoundError;
@@ -27,7 +27,7 @@ impl Reader {
     }
 }
 
-pub fn read_str(s: &str) -> Result<MalType, Error> {
+pub fn read_str(s: &str) -> Fallible<MalType> {
     let tokens = tokenizer(s);
     let mut reader = Reader::new(tokens);
     read_form(&mut reader)
@@ -48,7 +48,7 @@ fn tokenizer(s: &str) -> Vec<String> {
     caps
 }
 
-fn read_form(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_form(reader: &mut Reader) -> Fallible<MalType> {
     if let Some(token) = reader.peek() {
         let mut chars = token.chars();
         let first_char = chars.next();
@@ -80,7 +80,7 @@ fn read_form(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-fn read_list(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_list(reader: &mut Reader) -> Fallible<MalType> {
     let mut ret = Vec::new();
     loop {
         reader.next();
@@ -103,7 +103,7 @@ fn read_list(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-fn read_vec(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_vec(reader: &mut Reader) -> Fallible<MalType> {
     let mut ret = Vec::new();
     loop {
         reader.next();
@@ -126,7 +126,7 @@ fn read_vec(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-fn read_hashmap(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
     let mut ret = Vec::new();
     loop {
         reader.next();
@@ -149,27 +149,27 @@ fn read_hashmap(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-fn read_quote(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_quote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     return Ok(MalType::List(vec![MalType::Symbol("quote".to_string()), read_form(reader)?]));
 }
 
-fn read_quasiquote(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_quasiquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     return Ok(MalType::List(vec![MalType::Symbol("quasiquote".to_string()), read_form(reader)?]));
 }
 
-fn read_unquote(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     return Ok(MalType::List(vec![MalType::Symbol("unquote".to_string()), read_form(reader)?]));
 }
 
-fn read_splice_unquote(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_splice_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     return Ok(MalType::List(vec![MalType::Symbol("splice-unquote".to_string()), read_form(reader)?]));
 }
 
-fn read_symbol(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_symbol(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
@@ -188,7 +188,7 @@ fn read_symbol(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-fn read_string(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_string(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
@@ -231,7 +231,7 @@ fn read_string(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-fn read_keyword(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_keyword(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
@@ -240,7 +240,7 @@ fn read_keyword(reader: &mut Reader) -> Result<MalType, Error> {
     }
 }
 
-fn read_with_meta(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_with_meta(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     let hashmap = read_form(reader)?;
     reader.next();
@@ -248,7 +248,7 @@ fn read_with_meta(reader: &mut Reader) -> Result<MalType, Error> {
     return Ok(MalType::WithMeta(Box::new(vector), Box::new(hashmap)));
 }
 
-fn read_deref(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_deref(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     match reader.peek() {
         None => unreachable!(),
