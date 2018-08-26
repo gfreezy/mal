@@ -56,6 +56,11 @@ impl Closure {
             is_macro: false,
         }
     }
+
+    pub fn call(&self, params: Vec<MalType>) -> Fallible<MalType> {
+        let f = &self.func;
+        f(params, self.c_env.clone())
+    }
 }
 
 

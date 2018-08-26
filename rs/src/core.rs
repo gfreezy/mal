@@ -8,6 +8,7 @@ use std::io::Read;
 use std::rc::Rc;
 use std::cell::RefCell;
 use types::ClosureEnv;
+use error::MalExceptionError;
 
 
 fn add(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -227,9 +228,48 @@ fn rest(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Ma
 fn throw(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "throw should have 1 params");
     let e = params.remove(0);
-    bail!("{}", pr_str(&e, false))
+    Err(MalExceptionError(pr_str(&e, true)).into())
 }
 
+fn apply(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() >= 2, "apply should have at least 2 params");
+    let func = params.remove(0);
+    ensure!(func.is_closure(), "apply's first param should be func");
+    let list = params.pop().unwrap();
+    ensure!(list.is_collection(), "apply's last param should be list");
+    params.extend(list.get_items());
+    func.get_closure().call(params)
+}
+
+fn map(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() >= 2, "map should have 2 params");
+    let func = params.remove(0);
+    ensure!(func.is_closure(), "map's first param should be func");
+    let list = params.remove(0);
+    ensure!(list.is_collection(), "map's last param should be list");
+    let f = func.get_closure();
+    Ok(MalType::List(list.get_items().into_iter().map(|mal| f.call(vec![mal])).collect::<Fallible<Vec<MalType>>>()?))
+}
+
+fn is_nil(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "nil? should have 1 params");
+    Ok(MalType::Bool(params.remove(0) == MalType::Nil))
+}
+
+fn is_true(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "true? should have 1 params");
+    Ok(MalType::Bool(params.remove(0) == MalType::Bool(true)))
+}
+
+fn is_false(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "false? should have 1 params");
+    Ok(MalType::Bool(params.remove(0) == MalType::Bool(false)))
+}
+
+fn is_symbol(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "symbol? should have 1 params");
+    Ok(MalType::Bool(params.remove(0).is_symbol()))
+}
 
 pub struct Ns {
     pub map: HashMap<String, Closure>
@@ -237,39 +277,45 @@ pub struct Ns {
 
 impl Ns {
     pub fn new() -> Self {
-        let mut map: HashMap<String, Closure> = HashMap::new();
-        map.insert("+".to_string(), Closure::new(add, None));
-        map.insert("-".to_string(), Closure::new(minus, None));
-        map.insert("*".to_string(), Closure::new(multiply, None));
-        map.insert("/".to_string(), Closure::new(divide, None));
-        map.insert("prn".to_string(), Closure::new(prn, None));
-        map.insert("str".to_string(), Closure::new(str2, None));
-        map.insert("pr-str".to_string(), Closure::new(pr_str2, None));
-        map.insert("println".to_string(), Closure::new(println2, None));
-        map.insert("list".to_string(), Closure::new(list, None));
-        map.insert("list?".to_string(), Closure::new(is_list, None));
-        map.insert("empty?".to_string(), Closure::new(is_empty, None));
-        map.insert("count".to_string(), Closure::new(count, None));
-        map.insert("=".to_string(), Closure::new(equal, None));
-        map.insert("<".to_string(), Closure::new(less_than, None));
-        map.insert("<=".to_string(), Closure::new(less_than_equal, None));
-        map.insert(">".to_string(), Closure::new(greater_than, None));
-        map.insert(">=".to_string(), Closure::new(greater_than_equal, None));
-        map.insert("read-string".to_string(), Closure::new(read_string, None));
-        map.insert("slurp".to_string(), Closure::new(slurp, None));
-        map.insert("atom".to_string(), Closure::new(atom, None));
-        map.insert("atom?".to_string(), Closure::new(is_atom, None));
-        map.insert("deref".to_string(), Closure::new(deref, None));
-        map.insert("reset!".to_string(), Closure::new(reset, None));
-        map.insert("cons".to_string(), Closure::new(cons, None));
-        map.insert("concat".to_string(), Closure::new(concat, None));
-        map.insert("nth".to_string(), Closure::new(nth, None));
-        map.insert("first".to_string(), Closure::new(first, None));
-        map.insert("rest".to_string(), Closure::new(rest, None));
-        map.insert("throw".to_string(), Closure::new(throw, None));
+        let mut mapping: HashMap<String, Closure> = HashMap::new();
+        mapping.insert("+".to_string(), Closure::new(add, None));
+        mapping.insert("-".to_string(), Closure::new(minus, None));
+        mapping.insert("*".to_string(), Closure::new(multiply, None));
+        mapping.insert("/".to_string(), Closure::new(divide, None));
+        mapping.insert("prn".to_string(), Closure::new(prn, None));
+        mapping.insert("str".to_string(), Closure::new(str2, None));
+        mapping.insert("pr-str".to_string(), Closure::new(pr_str2, None));
+        mapping.insert("println".to_string(), Closure::new(println2, None));
+        mapping.insert("list".to_string(), Closure::new(list, None));
+        mapping.insert("list?".to_string(), Closure::new(is_list, None));
+        mapping.insert("empty?".to_string(), Closure::new(is_empty, None));
+        mapping.insert("count".to_string(), Closure::new(count, None));
+        mapping.insert("=".to_string(), Closure::new(equal, None));
+        mapping.insert("<".to_string(), Closure::new(less_than, None));
+        mapping.insert("<=".to_string(), Closure::new(less_than_equal, None));
+        mapping.insert(">".to_string(), Closure::new(greater_than, None));
+        mapping.insert(">=".to_string(), Closure::new(greater_than_equal, None));
+        mapping.insert("read-string".to_string(), Closure::new(read_string, None));
+        mapping.insert("slurp".to_string(), Closure::new(slurp, None));
+        mapping.insert("atom".to_string(), Closure::new(atom, None));
+        mapping.insert("atom?".to_string(), Closure::new(is_atom, None));
+        mapping.insert("deref".to_string(), Closure::new(deref, None));
+        mapping.insert("reset!".to_string(), Closure::new(reset, None));
+        mapping.insert("cons".to_string(), Closure::new(cons, None));
+        mapping.insert("concat".to_string(), Closure::new(concat, None));
+        mapping.insert("nth".to_string(), Closure::new(nth, None));
+        mapping.insert("first".to_string(), Closure::new(first, None));
+        mapping.insert("rest".to_string(), Closure::new(rest, None));
+        mapping.insert("throw".to_string(), Closure::new(throw, None));
+        mapping.insert("map".to_string(), Closure::new(map, None));
+        mapping.insert("apply".to_string(), Closure::new(apply, None));
+        mapping.insert("nil?".to_string(), Closure::new(is_nil, None));
+        mapping.insert("true?".to_string(), Closure::new(is_true, None));
+        mapping.insert("false?".to_string(), Closure::new(is_false, None));
+        mapping.insert("symbol?".to_string(), Closure::new(is_symbol, None));
 
         Ns {
-            map
+            map: mapping
         }
     }
 }

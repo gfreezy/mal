@@ -11,43 +11,47 @@ extern crate rustyline;
 use failure::Fallible;
 use rs::core::Ns;
 use rs::env::Env;
-use rs::error::CommentFoundError;
 use rs::printer::pr_str;
 use rs::reader::read_str;
 use rs::types::Closure;
 use rs::types::MalType;
 use rustyline::Editor;
-use rustyline::error::ReadlineError;
 use std::env;
+use rs::error::CommentFoundError;
+use rustyline::error::ReadlineError;
+use rs::types::ClosureEnv;
+use std::rc::Rc;
+use rs::error::MalExceptionError;
 
 
 const HIST_PATH: &str = ".mal-history";
 
-fn apply_closure(closure: Closure, mut args: Vec<MalType>) -> Fallible<MalType> {
-    let params = closure.parameters.get_items();
-    let mut binds: Vec<String> = params.into_iter().map(|mal| mal.get_symbol()).collect();
+fn call_for_closure(params: Vec<MalType>, c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(c_env.is_some(), "closure env should be available");
+    let c_env = c_env.unwrap();
+    let mut exprs = params;
+    let mut binds = c_env.parameters.get_symbol_list_ref();
 
     let idx = binds.iter().position(|e| *e == "&");
 
     let new_env = if let Some(idx) = idx {
         ensure!(binds.len() == idx + 2, "& must be followed by a param name");
-        ensure!(args.len() >= idx, "closure arguments not match params");
+        ensure!(exprs.len() >= idx, "closure arguments not match params");
 
         // drop "&"
         binds.remove(idx);
-        let positioned_args: Vec<MalType> = args.drain(0..idx).collect();
-        let varargs = args;
+        let positioned_args: Vec<MalType> = exprs.drain(0..idx).collect();
+        let varargs = exprs;
         let mut exprs = positioned_args;
         exprs.push(MalType::List(varargs));
-        Env::new(Some(closure.env), binds, exprs)
+        Env::new(Some(c_env.env.clone()), binds, exprs)
     } else {
-        ensure!(args.len() == binds.len(), "closure arguments not match params");
-        Env::new(Some(closure.env), binds, args)
+        ensure!(exprs.len() == binds.len(), "closure arguments not match params");
+        Env::new(Some(c_env.env.clone()), binds, exprs)
     };
 
-    eval(closure.body, new_env)
+    eval(c_env.body.clone(), new_env)
 }
-
 
 fn quasiquote(ast: MalType) -> MalType {
     if !is_pair(&ast) {
@@ -93,7 +97,7 @@ fn macroexpand(mut ast: MalType, env: Env) -> Fallible<MalType> {
         let mut items = ast.get_items();
         let first_el = items.remove(0);
         let func = env.get(first_el.get_symbol_ref()).expect("get macro func");
-        ast = apply_closure(func.get_closure(), items)?;
+        ast = func.get_closure().call(items)?;
     }
     Ok(ast)
 }
@@ -115,7 +119,6 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
 
         let mut list = mal.get_items();
         let first_mal = list.remove(0);
-
 
         if first_mal.is_symbol() {
             match first_mal.get_symbol_ref().as_ref() {
@@ -175,11 +178,12 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                 }
                 "fn*" => {
                     ensure!(list.len() == 2, "fn* should have 2 params");
-                    return Ok(MalType::Closure(Box::new(Closure::new(
+                    let c_env = ClosureEnv::new(
                         list.remove(0),
                         list.remove(0),
                         env.clone(),
-                    ))));
+                    );
+                    return Ok(MalType::Closure(Closure::new(call_for_closure, Some(c_env))));
                 }
                 "eval" => {
                     ensure!(list.len() == 1, "eval should have 1 params");
@@ -194,21 +198,12 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     let atom = params.remove(0);
                     let func = params.remove(0);
                     ensure!(atom.is_atom(), "swap!'s first param should be of type atom");
-                    ensure!(func.is_closure() || func.is_func(), "swap!'s second param should be a func");
+                    ensure!(func.is_closure(), "swap!'s second param should be a func");
 
                     let old_mal = atom.get_atom();
                     params.insert(0, old_mal);
                     if let MalType::Atom(a) = atom {
-                        let new_mal = if func.is_closure() {
-                            let mut exec_mal = vec![func];
-                            exec_mal.extend(params);
-                            eval(MalType::List(exec_mal), env.clone())?
-                        } else if func.is_func() {
-                            let f = func.get_func();
-                            f(params)?
-                        } else {
-                            unreachable!();
-                        };
+                        let new_mal =  func.get_closure().call(params)?;
                         let _ = a.replace(new_mal.clone());
                         return Ok(new_mal);
                     }
@@ -244,12 +239,20 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     catch_clause.remove(0);
                     ensure!(catch_clause.len() == 2, "catch* should have 2 params");
 
-                    let error = match eval(stmt, env.clone()) {
+                    let exception = match eval(stmt, env.clone()) {
                         Ok(ast) => return Ok(ast),
-                        Err(e) => e
+                        Err(e) => {
+                            let downcast = e.downcast::<MalExceptionError>();
+                            match downcast {
+                                Ok(MalExceptionError(s)) => {
+                                    read_str(&s)?
+                                }
+                                Err(e) => {
+                                    MalType::String(format!("{}", e))
+                                }
+                            }
+                        }
                     };
-                    let exception_str = format!("{}", error);;
-                    let exception = read_str(&exception_str)?;
 
                     let variable_name_mal = catch_clause.remove(0);
                     ensure!(variable_name_mal.is_symbol(), "catch* first param should be symbol");
@@ -270,36 +273,9 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
 
         let new_first_mal = eval(first_mal, env.clone())?;
         return match new_first_mal {
-            MalType::Func(func) => {
+            MalType::Closure(ref closure) => {
                 let params = list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?;
-                func(params)
-            }
-            MalType::Closure(closure) => {
-                let mut exprs: Vec<MalType> = list.into_iter().map(|el| eval(el, env.clone())).collect::<Fallible<Vec<MalType>>>()?;
-                let params = closure.parameters.get_items();
-                let mut binds: Vec<String> = params.into_iter().map(|mal| mal.get_symbol()).collect();
-
-                let idx = binds.iter().position(|e| *e == "&");
-
-                let new_env = if let Some(idx) = idx {
-                    ensure!(binds.len() == idx + 2, "& must be followed by a param name");
-                    ensure!(exprs.len() >= idx, "closure arguments not match params");
-
-                    // drop "&"
-                    binds.remove(idx);
-                    let positioned_args: Vec<MalType> = exprs.drain(0..idx).collect();
-                    let varargs = exprs;
-                    let mut exprs = positioned_args;
-                    exprs.push(MalType::List(varargs));
-                    Env::new(Some(closure.env), binds, exprs)
-                } else {
-                    ensure!(exprs.len() == binds.len(), "closure arguments not match params");
-                    Env::new(Some(closure.env), binds, exprs)
-                };
-
-                mal = closure.body;
-                env = new_env;
-                continue;
+                closure.call(params)
             }
             _ => {
                 bail!("{:?} is not a function", new_first_mal)
@@ -357,7 +333,7 @@ fn main() -> Fallible<()> {
     let ns = Ns::new();
     let mut repl_env = Env::new(None, Vec::new(), Vec::new());
     for (k, v) in ns.map {
-        repl_env.set(k, MalType::Func(v));
+        repl_env.set(k, MalType::Closure(v));
     }
 
     let _ = rep("(def! not (fn* (a) (if a false true)))", repl_env.clone())?;
