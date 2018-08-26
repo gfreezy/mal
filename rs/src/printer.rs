@@ -71,13 +71,13 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
             s.push_str(&pr_str(hashmap, print_readably));
             s.push_str(")");
         }
-        MalType::Func(..) => {
-            s.push_str("#<function>");
-        },
         MalType::Atom(atom) => {
             s.push_str("(atom ");
             s.push_str(&pr_str(&atom.borrow(), print_readably));
             s.push_str(")")
+        }
+        MalType::Func(..) => {
+            s.push_str("#<function>");
         }
         MalType::Closure(..) => {
             s.push_str("#<function>");

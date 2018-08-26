@@ -40,7 +40,7 @@ fn pr_str2(params: Vec<MalType>) -> Fallible<MalType> {
     Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, true)).collect::<Vec<String>>().join(" ")))
 }
 
-fn str2(params: Vec<MalType>) -> Fallible<MalType> {
+pub fn str2(params: Vec<MalType>) -> Fallible<MalType> {
     Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, false)).collect::<Vec<String>>().join("")))
 }
 
@@ -223,6 +223,12 @@ fn rest(mut params: Vec<MalType>) -> Fallible<MalType> {
     return Ok(MalType::List(l))
 }
 
+fn throw(mut params: Vec<MalType>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "throw should have 1 params");
+    let e = params.remove(0);
+    bail!("{}", pr_str(&e, false))
+}
+
 pub struct Ns {
     pub map: HashMap<String, CoreFunc>
 }
@@ -258,6 +264,7 @@ impl Ns {
         map.insert("nth".to_string(), nth);
         map.insert("first".to_string(), first);
         map.insert("rest".to_string(), rest);
+        map.insert("throw".to_string(), throw);
 
         Ns {
             map
