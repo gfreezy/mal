@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 
-pub type CoreFunc = fn(Vec<MalType>) -> Fallible<MalType>;
+pub type ClosureFunc = fn(Vec<MalType>, Option<Rc<ClosureEnv>>) -> Fallible<MalType>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MalType {
@@ -20,39 +20,46 @@ pub enum MalType {
     Bool(bool),
 
     Atom(Rc<RefCell<MalType>>),
-    Func(CoreFunc),
-    Closure(Box<Closure>),
+    Closure(Closure),
 }
 
-#[derive(DebugStub, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Closure {
-    pub parameters: MalType,
-    pub body: MalType,
-    #[debug_stub=".."]
-    pub env: Env,
+    pub func: ClosureFunc,
+    pub c_env: Option<Rc<ClosureEnv>>,
     pub is_macro: bool,
 }
 
-impl Closure {
+#[derive(DebugStub, Clone, PartialEq)]
+pub struct ClosureEnv {
+    pub parameters: MalType,
+    pub body: MalType,
+    #[debug_stub = ".."]
+    pub env: Env,
+}
+
+impl ClosureEnv {
     pub fn new(params: MalType, body: MalType, env: Env) -> Self {
-        Closure {
+        ClosureEnv {
             parameters: params,
             body,
             env,
-            is_macro: false
+        }
+    }
+}
+
+impl Closure {
+    pub fn new(func: ClosureFunc, c_env: Option<ClosureEnv>) -> Self {
+        Closure {
+            func,
+            c_env: c_env.map(Rc::new),
+            is_macro: false,
         }
     }
 }
 
 
 impl MalType {
-    pub fn get_func(self) -> CoreFunc {
-        match self {
-            MalType::Func(f) => f,
-            _ => unreachable!()
-        }
-    }
-
     pub fn get_num(self) -> f64 {
         match self {
             MalType::Num(n) => n,
@@ -62,7 +69,7 @@ impl MalType {
 
     pub fn get_closure(self) -> Closure {
         match self {
-            MalType::Closure(f) => *f,
+            MalType::Closure(f) => f,
             _ => unreachable!()
         }
     }
@@ -106,6 +113,16 @@ impl MalType {
         }
     }
 
+    pub fn get_symbol_list_ref(&self) -> Vec<String> {
+        let l = match *self {
+            MalType::List(ref l) => l,
+            MalType::Vec(ref l) => l,
+            MalType::Hashmap(ref l) => l,
+            _ => unreachable!()
+        };
+        l.iter().map(|el| el.get_symbol_ref().to_owned()).collect()
+    }
+
     pub fn get_number(self) -> f64 {
         match self {
             MalType::Num(n) => n,
@@ -136,13 +153,6 @@ impl MalType {
 
     pub fn is_num(&self) -> bool {
         if let &MalType::Num(_) = self {
-            return true;
-        }
-        return false;
-    }
-
-    pub fn is_func(&self) -> bool {
-        if let &MalType::Func(_) = self {
             return true;
         }
         return false;
@@ -209,19 +219,6 @@ impl MalType {
             return list.is_empty();
         }
         return false;
-    }
-
-    pub fn did_collection_have_leading_func(&self) -> bool {
-        if !self.is_collection() || self.is_empty_collection() {
-            return false;
-        }
-
-        match *self {
-            MalType::List(ref l) => l[0].is_func(),
-            MalType::Vec(ref l) => l[0].is_func(),
-            MalType::Hashmap(ref l) => l[0].is_func(),
-            _ => unreachable!()
-        }
     }
 
     pub fn did_collection_have_leading_symbol(&self) -> bool {
