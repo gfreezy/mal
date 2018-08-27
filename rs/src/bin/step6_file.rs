@@ -123,7 +123,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                         "swap!'s second param should be a func"
                     );
 
-                    let old_mal = atom.into_atom();
+                    let old_mal = atom.to_atom();
                     params.insert(0, old_mal);
                     if let MalType::Atom(a) = atom {
                         let new_mal = if func.is_closure() {

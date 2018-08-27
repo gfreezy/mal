@@ -205,7 +205,7 @@ fn deref(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<M
         p.is_atom(),
         "deref should have 1 param which is of type atom"
     );
-    Ok(p.into_atom())
+    Ok(p.to_atom())
 }
 
 fn reset(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -336,13 +336,11 @@ fn is_symbol(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallib
     Ok(MalType::Bool(params.remove(0).is_symbol()))
 }
 
-
 fn symbol(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "symbol should have 1 param");
     let s = params.remove(0).into_string();
     Ok(MalType::Symbol(s))
 }
-
 
 fn keyword(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "keyword should have 1 param");
@@ -365,7 +363,10 @@ fn is_vector(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallib
 }
 
 fn hashmap(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
-    ensure!(params.len() % 2 == 0, "hashmap should have even number of params");
+    ensure!(
+        params.len() % 2 == 0,
+        "hashmap should have even number of params"
+    );
     let mut map = HashMap::new();
     let mut drain = params.drain(..);
     while let Some(key) = drain.next() {
@@ -381,7 +382,10 @@ fn is_map(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<
 }
 
 fn assoc(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
-    ensure!(params.len() > 0 && params.len() % 2 == 1 , "assoc should have odd params");
+    ensure!(
+        params.len() > 0 && params.len() % 2 == 1,
+        "assoc should have odd params"
+    );
     let mut map = params.remove(0).into_hashmap();
     let mut pairs = params;
     let mut drain = pairs.drain(..);
@@ -401,7 +405,6 @@ fn dissoc(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<
     Ok(MalType::Hashmap(map))
 }
 
-
 fn get(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     let el = params.remove(0);
     if el.is_nil() {
@@ -413,19 +416,18 @@ fn get(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Mal
     Ok(map.remove(&key.into_hash_key()).unwrap_or(MalType::Nil))
 }
 
-
 fn contains(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     let map = params.remove(0).into_hashmap();
     let key = params.remove(0);
     Ok(MalType::Bool(map.contains_key(&key.into_hash_key())))
 }
 
-
 fn keys(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     let mut map = params.remove(0).into_hashmap();
-    Ok(MalType::List(map.drain().map(|(k, _)| k.into_mal_type()).collect()))
+    Ok(MalType::List(
+        map.drain().map(|(k, _)| k.into_mal_type()).collect(),
+    ))
 }
-
 
 fn vals(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     let mut map = params.remove(0).into_hashmap();

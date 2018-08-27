@@ -216,7 +216,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     ensure!(atom.is_atom(), "swap!'s first param should be of type atom");
                     ensure!(func.is_closure(), "swap!'s second param should be a func");
 
-                    let old_mal = atom.into_atom();
+                    let old_mal = atom.to_atom();
                     params.insert(0, old_mal);
                     if let MalType::Atom(a) = atom {
                         let new_mal = call_closure(&func.into_closure(), params)?;

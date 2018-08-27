@@ -20,9 +20,9 @@ use rs::types::ClosureEnv;
 use rs::types::MalType;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use std::collections::HashMap;
 use std::env;
 use std::rc::Rc;
-use std::collections::HashMap;
 
 const HIST_PATH: &str = ".mal-history";
 
@@ -216,7 +216,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     ensure!(atom.is_atom(), "swap!'s first param should be of type atom");
                     ensure!(func.is_closure(), "swap!'s second param should be a func");
 
-                    let old_mal = atom.into_atom();
+                    let old_mal = atom.to_atom();
                     params.insert(0, old_mal);
                     if let MalType::Atom(a) = atom {
                         let new_mal = func.into_closure().call(params)?;

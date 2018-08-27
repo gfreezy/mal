@@ -1,8 +1,8 @@
 use env::Env;
 use failure::Fallible;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub type ClosureFunc = fn(Vec<MalType>, Option<Rc<ClosureEnv>>) -> Fallible<MalType>;
 
@@ -73,13 +73,13 @@ impl HashKey {
     pub fn to_mal_type(&self) -> MalType {
         match *self {
             HashKey::String(ref s) => MalType::String(s.to_owned()),
-            HashKey::Keyword(ref s) => MalType::Keyword(s.to_owned())
+            HashKey::Keyword(ref s) => MalType::Keyword(s.to_owned()),
         }
     }
     pub fn into_mal_type(self) -> MalType {
         match self {
             HashKey::String(s) => MalType::String(s),
-            HashKey::Keyword(s) => MalType::Keyword(s)
+            HashKey::Keyword(s) => MalType::Keyword(s),
         }
     }
 }
@@ -89,7 +89,7 @@ impl MalType {
         match self {
             MalType::String(s) => HashKey::String(s),
             MalType::Keyword(s) => HashKey::Keyword(s),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -167,7 +167,7 @@ impl MalType {
         }
     }
 
-    pub fn into_atom(&self) -> MalType {
+    pub fn to_atom(&self) -> MalType {
         match *self {
             MalType::Atom(ref mal) => mal.borrow().clone(),
             _ => unreachable!(),
@@ -270,9 +270,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l) | MalType::Vec(ref l) => {
-                l[0].is_symbol()
-            }
+            MalType::List(ref l) | MalType::Vec(ref l) => l[0].is_symbol(),
             _ => unreachable!(),
         }
     }
@@ -283,9 +281,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l) | MalType::Vec(ref l) => {
-                l[0].is_closure()
-            }
+            MalType::List(ref l) | MalType::Vec(ref l) => l[0].is_closure(),
             _ => unreachable!(),
         }
     }
