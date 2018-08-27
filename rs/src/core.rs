@@ -1,36 +1,41 @@
-use std::collections::HashMap;
-use types::{MalType, Closure};
+use error::MalExceptionError;
 use failure::Fallible;
 use printer::pr_str;
 use reader::read_str;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
-use std::cell::RefCell;
 use types::ClosureEnv;
-use error::MalExceptionError;
-
+use types::{Closure, MalType};
 
 fn add(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "add should have 2 params");
-    Ok(MalType::Num(params.remove(0).get_number() + params.remove(0).get_number()))
+    Ok(MalType::Num(
+        params.remove(0).get_number() + params.remove(0).get_number(),
+    ))
 }
 
 fn minus(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "minus should have 2 params");
-    Ok(MalType::Num(params.remove(0).get_number() - params.remove(0).get_number()))
+    Ok(MalType::Num(
+        params.remove(0).get_number() - params.remove(0).get_number(),
+    ))
 }
-
 
 fn multiply(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "multiply should have 2 params");
-    Ok(MalType::Num(params.remove(0).get_number() * params.remove(0).get_number()))
+    Ok(MalType::Num(
+        params.remove(0).get_number() * params.remove(0).get_number(),
+    ))
 }
-
 
 fn divide(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "divide should have 2 params");
-    Ok(MalType::Num(params.remove(0).get_number() / params.remove(0).get_number()))
+    Ok(MalType::Num(
+        params.remove(0).get_number() / params.remove(0).get_number(),
+    ))
 }
 
 fn prn(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -39,15 +44,34 @@ fn prn(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType
 }
 
 fn pr_str2(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
-    Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, true)).collect::<Vec<String>>().join(" ")))
+    Ok(MalType::String(
+        params
+            .into_iter()
+            .map(|p| pr_str(&p, true))
+            .collect::<Vec<String>>()
+            .join(" "),
+    ))
 }
 
 pub fn str2(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
-    Ok(MalType::String(params.into_iter().map(|p| pr_str(&p, false)).collect::<Vec<String>>().join("")))
+    Ok(MalType::String(
+        params
+            .into_iter()
+            .map(|p| pr_str(&p, false))
+            .collect::<Vec<String>>()
+            .join(""),
+    ))
 }
 
 fn println2(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
-    println!("{}", params.into_iter().map(|p| pr_str(&p, false)).collect::<Vec<String>>().join(" "));
+    println!(
+        "{}",
+        params
+            .into_iter()
+            .map(|p| pr_str(&p, false))
+            .collect::<Vec<String>>()
+            .join(" ")
+    );
     Ok(MalType::Nil)
 }
 
@@ -55,7 +79,6 @@ fn println2(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Ma
 fn list(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     Ok(MalType::List(params))
 }
-
 
 fn is_list(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "list? should have 1 params");
@@ -92,7 +115,10 @@ fn eq(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> bool {
             return false;
         }
 
-        return inner_left.into_iter().zip(inner_right).all(|(l, r)| eq(vec![l, r], None));
+        return inner_left
+            .into_iter()
+            .zip(inner_right)
+            .all(|(l, r)| eq(vec![l, r], None));
     } else {
         return left == right;
     }
@@ -119,7 +145,10 @@ fn greater_than(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fal
     Ok(MalType::Bool(left.get_number() > right.get_number()))
 }
 
-fn greater_than_equal(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+fn greater_than_equal(
+    mut params: Vec<MalType>,
+    _c_env: Option<Rc<ClosureEnv>>,
+) -> Fallible<MalType> {
     ensure!(params.len() == 2, ">= should have 2 params");
     let left = params.remove(0);
     let right = params.remove(0);
@@ -156,7 +185,10 @@ fn is_atom(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible
 fn deref(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "deref should have 1 params");
     let p = params.remove(0);
-    ensure!(p.is_atom(), "deref should have 1 param which is of type atom");
+    ensure!(
+        p.is_atom(),
+        "deref should have 1 param which is of type atom"
+    );
     Ok(p.get_atom())
 }
 
@@ -184,8 +216,17 @@ fn cons(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Ma
 }
 
 fn concat(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
-    ensure!(params.iter().all(|el| el.is_collection()), "concat's all params should be list");
-    Ok(MalType::List(params.into_iter().map(|mal| mal.get_items()).collect::<Vec<Vec<MalType>>>().concat()))
+    ensure!(
+        params.iter().all(|el| el.is_collection()),
+        "concat's all params should be list"
+    );
+    Ok(MalType::List(
+        params
+            .into_iter()
+            .map(|mal| mal.get_items())
+            .collect::<Vec<Vec<MalType>>>()
+            .concat(),
+    ))
 }
 
 fn nth(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -193,13 +234,16 @@ fn nth(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Mal
     let list = params.remove(0);
     let index_mal = params.remove(0);
     ensure!(index_mal.is_num(), "nth's first param should be num");
-    let float_index =  index_mal.get_number();
-    ensure!(float_index.trunc() == float_index, "nth index should be int");
+    let float_index = index_mal.get_number();
+    ensure!(
+        float_index.trunc() == float_index,
+        "nth index should be int"
+    );
     let index = float_index.trunc() as usize;
     ensure!(list.is_collection(), "nth's second param should be list");
     let mut l = list.get_items();
     ensure!(l.len() > index, "nth no enough items in list");
-    return Ok(l.remove(index))
+    return Ok(l.remove(index));
 }
 
 fn first(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -210,7 +254,7 @@ fn first(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<M
     }
     ensure!(list.is_collection(), "first's param should be list or nil");
     let mut l = list.get_items();
-    return Ok(l.remove(0))
+    return Ok(l.remove(0));
 }
 
 fn rest(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -222,7 +266,7 @@ fn rest(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Ma
     ensure!(list.is_collection(), "rest's param should be list or nil");
     let mut l = list.get_items();
     l.remove(0);
-    return Ok(MalType::List(l))
+    return Ok(MalType::List(l));
 }
 
 fn throw(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -248,7 +292,12 @@ fn map(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Mal
     let list = params.remove(0);
     ensure!(list.is_collection(), "map's last param should be list");
     let f = func.get_closure();
-    Ok(MalType::List(list.get_items().into_iter().map(|mal| f.call(vec![mal])).collect::<Fallible<Vec<MalType>>>()?))
+    Ok(MalType::List(
+        list.get_items()
+            .into_iter()
+            .map(|mal| f.call(vec![mal]))
+            .collect::<Fallible<Vec<MalType>>>()?,
+    ))
 }
 
 fn is_nil(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -272,7 +321,7 @@ fn is_symbol(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallib
 }
 
 pub struct Ns {
-    pub map: HashMap<String, Closure>
+    pub map: HashMap<String, Closure>,
 }
 
 impl Ns {
@@ -314,8 +363,6 @@ impl Ns {
         mapping.insert("false?".to_string(), Closure::new(is_false, None));
         mapping.insert("symbol?".to_string(), Closure::new(is_symbol, None));
 
-        Ns {
-            map: mapping
-        }
+        Ns { map: mapping }
     }
 }

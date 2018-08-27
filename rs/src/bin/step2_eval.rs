@@ -3,7 +3,7 @@ extern crate failure;
 extern crate rs;
 extern crate rustyline;
 
-use failure::Error;
+use failure::Fallible;
 use rs::printer::pr_str;
 use rs::reader::read_str;
 use rs::types::MalType;
@@ -14,7 +14,6 @@ use std::collections::HashMap;
 const HIST_PATH: &str = ".mal-history";
 
 type ReplEnv = HashMap<String, fn(f64, f64) -> f64>;
-
 
 fn add(a: f64, b: f64) -> f64 {
     a + b
@@ -32,7 +31,6 @@ fn divide(a: f64, b: f64) -> f64 {
     a / b
 }
 
-
 fn read(line: &str) -> Fallible<MalType> {
     read_str(line)
 }
@@ -45,14 +43,16 @@ fn eval(s: MalType, env: &ReplEnv) -> Fallible<MalType> {
 
     let new_list = new_mal.get_items();
     let func = new_list[0].clone().get_func();
-    let args: Vec<f64> = new_list[1..].iter().map(|mal| mal.clone().get_number()).collect();
+    let args: Vec<f64> = new_list[1..]
+        .iter()
+        .map(|mal| mal.clone().get_number())
+        .collect();
 
     Ok(MalType::Num(func(args[0], args[1])))
 }
 
-
 fn print(s: &MalType) -> String {
-    pr_str(s)
+    pr_str(s, true)
 }
 
 fn rep(s: &str) -> Fallible<String> {
@@ -69,31 +69,49 @@ fn rep(s: &str) -> Fallible<String> {
 
 fn eval_ast(ast: MalType, env: &ReplEnv) -> Fallible<MalType> {
     match ast {
-        MalType::Symbol(s) => return env.get(&s).map_or(Err(format_err!("'{}' not found", s)), |f| Ok(MalType::Func(f.clone()))),
-        MalType::List(list) => return Ok(MalType::List(list.into_iter().map(|el| eval(el, env)).collect::<Fallible<Vec<MalType>>>()?)),
-        MalType::Vec(list) => return Ok(MalType::Vec(list.into_iter().map(|el| eval(el, env)).collect::<Fallible<Vec<MalType>>>()?)),
-        MalType::Hashmap(list) => {
-            let (keys, values): (Vec<(usize, MalType)>, Vec<(usize, MalType)>) =
+        MalType::Symbol(s) => {
+            return env
+                .get(&s)
+                .map_or(Err(format_err!("'{}' not found", s)), |f| {
+                    Ok(MalType::Func(f.clone()))
+                })
+        }
+        MalType::List(list) => {
+            return Ok(MalType::List(
                 list.into_iter()
-                    .enumerate()
-                    .partition(|&(ref index, _)| index % 2 == 0);
+                    .map(|el| eval(el, env))
+                    .collect::<Fallible<Vec<MalType>>>()?,
+            ))
+        }
+        MalType::Vec(list) => {
+            return Ok(MalType::Vec(
+                list.into_iter()
+                    .map(|el| eval(el, env))
+                    .collect::<Fallible<Vec<MalType>>>()?,
+            ))
+        }
+        MalType::Hashmap(list) => {
+            let (keys, values): (Vec<(usize, MalType)>, Vec<(usize, MalType)>) = list
+                .into_iter()
+                .enumerate()
+                .partition(|&(ref index, _)| index % 2 == 0);
 
             ensure!(keys.len() == values.len(), "not valid hashmap");
-            let new_values: Vec<MalType> =
-                values.into_iter()
-                    .map(|(_, el)| eval(el, env))
-                    .collect::<Fallible<Vec<MalType>>>()?;
+            let new_values: Vec<MalType> = values
+                .into_iter()
+                .map(|(_, el)| eval(el, env))
+                .collect::<Fallible<Vec<MalType>>>()?;
 
-            let new_hashmap: Vec<MalType> =
-                keys.into_iter()
-                    .map(|(_, k)| k)
-                    .zip(new_values)
-                    .flat_map(|o| vec![o.0, o.1])
-                    .collect();
+            let new_hashmap: Vec<MalType> = keys
+                .into_iter()
+                .map(|(_, k)| k)
+                .zip(new_values)
+                .flat_map(|o| vec![o.0, o.1])
+                .collect();
 
             return Ok(MalType::Hashmap(new_hashmap));
         }
-        _ => return Ok(ast)
+        _ => return Ok(ast),
     }
 }
 

@@ -1,7 +1,7 @@
+use error::CommentFoundError;
 use failure::Fallible;
 use regex::Regex;
 use types::MalType;
-use error::CommentFoundError;
 
 struct Reader {
     tokens: Vec<String>,
@@ -44,7 +44,7 @@ fn tokenizer(s: &str) -> Vec<String> {
     for cap in RE.captures_iter(s) {
         caps.push(cap[1].to_string());
     }
-//    println!("{:?}", caps);
+    //    println!("{:?}", caps);
     caps
 }
 
@@ -70,9 +70,7 @@ fn read_form(reader: &mut Reader) -> Fallible<MalType> {
             Some('"') => return read_string(reader),
             Some('^') => return read_with_meta(reader),
             Some('@') => return read_deref(reader),
-            Some(';') => {
-                return Err(CommentFoundError.into())
-            },
+            Some(';') => return Err(CommentFoundError.into()),
             Some(_) => return read_symbol(reader),
         }
     } else {
@@ -151,22 +149,34 @@ fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
 
 fn read_quote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(vec![MalType::Symbol("quote".to_string()), read_form(reader)?]));
+    return Ok(MalType::List(vec![
+        MalType::Symbol("quote".to_string()),
+        read_form(reader)?,
+    ]));
 }
 
 fn read_quasiquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(vec![MalType::Symbol("quasiquote".to_string()), read_form(reader)?]));
+    return Ok(MalType::List(vec![
+        MalType::Symbol("quasiquote".to_string()),
+        read_form(reader)?,
+    ]));
 }
 
 fn read_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(vec![MalType::Symbol("unquote".to_string()), read_form(reader)?]));
+    return Ok(MalType::List(vec![
+        MalType::Symbol("unquote".to_string()),
+        read_form(reader)?,
+    ]));
 }
 
 fn read_splice_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(vec![MalType::Symbol("splice-unquote".to_string()), read_form(reader)?]));
+    return Ok(MalType::List(vec![
+        MalType::Symbol("splice-unquote".to_string()),
+        read_form(reader)?,
+    ]));
 }
 
 fn read_symbol(reader: &mut Reader) -> Fallible<MalType> {
@@ -181,9 +191,8 @@ fn read_symbol(reader: &mut Reader) -> Fallible<MalType> {
                 "nil" => MalType::Nil,
                 "true" => MalType::Bool(true),
                 "false" => MalType::Bool(false),
-                _ => MalType::Symbol(token.to_owned())
+                _ => MalType::Symbol(token.to_owned()),
             })
-
         }
     }
 }
@@ -201,19 +210,19 @@ fn read_string(reader: &mut Reader) -> Fallible<MalType> {
                         Some('\\') => {
                             new_token.push('\\');
                             let _ = chars.next();
-                        },
+                        }
                         Some('n') => {
                             new_token.push('\n');
                             let _ = chars.next();
-                        },
+                        }
                         Some('t') => {
                             new_token.push('\t');
                             let _ = chars.next();
-                        },
+                        }
                         Some('"') => {
                             new_token.push('"');
                             let _ = chars.next();
-                        },
+                        }
                         _ => {
                             new_token.push('\\');
                         }
@@ -225,7 +234,7 @@ fn read_string(reader: &mut Reader) -> Fallible<MalType> {
 
             let _ = new_token.pop();
 
-//            println!("{}", &new_token);
+            //            println!("{}", &new_token);
             return Ok(MalType::String(new_token));
         }
     }
@@ -253,7 +262,10 @@ fn read_deref(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
-            return Ok(MalType::List(vec![MalType::Symbol("deref".to_string()), MalType::Symbol(token.to_string())]));
+            return Ok(MalType::List(vec![
+                MalType::Symbol("deref".to_string()),
+                MalType::Symbol(token.to_string()),
+            ]));
         }
     }
 }

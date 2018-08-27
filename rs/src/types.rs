@@ -3,7 +3,6 @@ use failure::Fallible;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-
 pub type ClosureFunc = fn(Vec<MalType>, Option<Rc<ClosureEnv>>) -> Fallible<MalType>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,40 +62,39 @@ impl Closure {
     }
 }
 
-
 impl MalType {
     pub fn get_num(self) -> f64 {
         match self {
             MalType::Num(n) => n,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     pub fn get_closure(self) -> Closure {
         match self {
             MalType::Closure(f) => f,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     pub fn get_symbol(self) -> String {
         match self {
             MalType::Symbol(s) => s,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     pub fn get_symbol_ref(&self) -> &String {
         match *self {
             MalType::Symbol(ref s) => s,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     pub fn get_string(self) -> String {
         match self {
             MalType::String(s) => s,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -105,7 +103,7 @@ impl MalType {
             MalType::List(l) => l,
             MalType::Vec(l) => l,
             MalType::Hashmap(l) => l,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -114,7 +112,7 @@ impl MalType {
             MalType::List(ref l) => l,
             MalType::Vec(ref l) => l,
             MalType::Hashmap(ref l) => l,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -123,7 +121,7 @@ impl MalType {
             MalType::List(ref l) => l,
             MalType::Vec(ref l) => l,
             MalType::Hashmap(ref l) => l,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
         l.iter().map(|el| el.get_symbol_ref().to_owned()).collect()
     }
@@ -131,14 +129,14 @@ impl MalType {
     pub fn get_number(self) -> f64 {
         match self {
             MalType::Num(n) => n,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     pub fn get_atom(&self) -> MalType {
         match *self {
             MalType::Atom(ref mal) => mal.borrow().clone(),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -235,7 +233,7 @@ impl MalType {
             MalType::List(ref l) | MalType::Vec(ref l) | MalType::Hashmap(ref l) => {
                 l[0].is_symbol()
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -248,7 +246,7 @@ impl MalType {
             MalType::List(ref l) | MalType::Vec(ref l) | MalType::Hashmap(ref l) => {
                 l[0].is_closure()
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -265,25 +263,21 @@ impl MalType {
                     None
                 }
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     pub fn set_is_macro(&mut self) {
         match *self {
-            MalType::Closure(ref mut c) => {
-                c.is_macro = true
-            }
-            _ => unreachable!()
+            MalType::Closure(ref mut c) => c.is_macro = true,
+            _ => unreachable!(),
         }
     }
 
     pub fn is_macro_closure(&self) -> bool {
         match *self {
-            MalType::Closure(ref c) => {
-                c.is_macro
-            }
-            _ => unreachable!()
+            MalType::Closure(ref c) => c.is_macro,
+            _ => unreachable!(),
         }
     }
 }

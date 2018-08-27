@@ -10,9 +10,9 @@ extern crate indextree;
 #[macro_use]
 extern crate debug_stub_derive;
 
+pub mod core;
+pub mod env;
+pub mod error;
 pub mod printer;
 pub mod reader;
 pub mod types;
-pub mod env;
-pub mod core;
-pub mod error;
