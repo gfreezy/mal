@@ -28,7 +28,7 @@ fn call(params: Vec<MalType>, c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType
     ensure!(c_env.is_some(), "closure env should be available");
     let c_env = c_env.unwrap();
     let mut exprs = params;
-    let mut binds = c_env.parameters.get_symbol_list_ref();
+    let mut binds = c_env.parameters.to_symbol_list();
 
     let idx = binds.iter().position(|e| *e == "&");
 
@@ -64,16 +64,16 @@ fn quasiquote(ast: MalType) -> MalType {
         return MalType::List(vec![MalType::Symbol("quote".to_string()), ast]);
     }
 
-    let mut list = ast.get_items();
+    let mut list = ast.into_items();
     let first = list.remove(0);
-    if first.is_symbol() && first.get_symbol_ref() == "unquote" {
+    if first.is_symbol() && first.to_symbol() == "unquote" {
         return list.remove(0);
     }
 
     if is_pair(&first) {
-        let mut list_of_first = first.clone().get_items();
+        let mut list_of_first = first.clone().into_items();
         let first_of_first = list_of_first.remove(0);
-        if first_of_first.is_symbol() && first_of_first.get_symbol_ref() == "splice-unquote" {
+        if first_of_first.is_symbol() && first_of_first.to_symbol() == "splice-unquote" {
             let ret = vec![
                 MalType::Symbol("concat".to_string()),
                 list_of_first.remove(0),
@@ -93,13 +93,13 @@ fn quasiquote(ast: MalType) -> MalType {
 }
 
 fn is_pair(param: &MalType) -> bool {
-    param.is_collection() && param.get_items_ref().len() > 0
+    param.is_collection() && param.to_items().len() > 0
 }
 
 fn is_macro_call(ast: &MalType, env: Env) -> bool {
     if ast.did_collection_have_leading_symbol() {
-        let items = ast.get_items_ref();
-        let symbol = env.get(items[0].get_symbol_ref());
+        let items = ast.to_items();
+        let symbol = env.get(items[0].to_symbol());
         return symbol.map(|f| f.is_closure() && f.is_macro_closure()) == Some(true);
     }
 
@@ -108,10 +108,10 @@ fn is_macro_call(ast: &MalType, env: Env) -> bool {
 
 fn macroexpand(mut ast: MalType, env: Env) -> Fallible<MalType> {
     while is_macro_call(&ast, env.clone()) {
-        let mut items = ast.get_items();
+        let mut items = ast.into_items();
         let first_el = items.remove(0);
-        let func = env.get(first_el.get_symbol_ref()).expect("get macro func");
-        ast = call_closure(&func.get_closure(), items)?;
+        let func = env.get(first_el.to_symbol()).expect("get macro func");
+        ast = call_closure(&func.into_closure(), items)?;
     }
     Ok(ast)
 }
@@ -131,27 +131,27 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
             return eval_ast(mal, env.clone());
         }
 
-        let mut list = mal.get_items();
+        let mut list = mal.into_items();
         let first_mal = list.remove(0);
 
         if first_mal.is_symbol() {
-            match first_mal.get_symbol_ref().as_ref() {
+            match first_mal.to_symbol().as_ref() {
                 "def!" => {
                     ensure!(list.len() == 2, "def! should have 2 params");
-                    let symbol_key = list.remove(0).get_symbol();
+                    let symbol_key = list.remove(0).into_symbol();
                     let value = eval(list.remove(0), env.clone())?;
                     return Ok(env.set(symbol_key, value));
                 }
                 "let*" => {
                     ensure!(list.len() == 2, "let* should have 2 params");
                     let mut new_env = Env::new(Some(env.clone()), Vec::new(), Vec::new());
-                    let mut binding_list = list.remove(0).get_items();
+                    let mut binding_list = list.remove(0).into_items();
                     ensure!(
                         binding_list.len() % 2 == 0,
                         "def! binding list should have 2n params"
                     );
                     while binding_list.len() >= 2 {
-                        let key = binding_list.remove(0).get_symbol();
+                        let key = binding_list.remove(0).into_symbol();
                         let value = eval(binding_list.remove(0), new_env.clone())?;
                         new_env.set(key, value);
                     }
@@ -216,10 +216,10 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     ensure!(atom.is_atom(), "swap!'s first param should be of type atom");
                     ensure!(func.is_closure(), "swap!'s second param should be a func");
 
-                    let old_mal = atom.get_atom();
+                    let old_mal = atom.into_atom();
                     params.insert(0, old_mal);
                     if let MalType::Atom(a) = atom {
-                        let new_mal = call_closure(&func.get_closure(), params)?;
+                        let new_mal = call_closure(&func.into_closure(), params)?;
                         let _ = a.replace(new_mal.clone());
                         return Ok(new_mal);
                     }
@@ -236,7 +236,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                 }
                 "defmacro!" => {
                     ensure!(list.len() == 2, "defmacro! should have 2 params");
-                    let symbol_key = list.remove(0).get_symbol();
+                    let symbol_key = list.remove(0).into_symbol();
                     let mut value = eval(list.remove(0), env.clone())?;
                     ensure!(
                         value.is_closure(),

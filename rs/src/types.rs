@@ -2,6 +2,7 @@ use env::Env;
 use failure::Fallible;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::collections::HashMap;
 
 pub type ClosureFunc = fn(Vec<MalType>, Option<Rc<ClosureEnv>>) -> Fallible<MalType>;
 
@@ -9,7 +10,7 @@ pub type ClosureFunc = fn(Vec<MalType>, Option<Rc<ClosureEnv>>) -> Fallible<MalT
 pub enum MalType {
     List(Vec<MalType>),
     Vec(Vec<MalType>),
-    Hashmap(Vec<MalType>),
+    Hashmap(HashMap<HashKey, MalType>),
     Num(f64),
     Symbol(String),
     Keyword(String),
@@ -62,78 +63,111 @@ impl Closure {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum HashKey {
+    String(String),
+    Keyword(String),
+}
+
+impl HashKey {
+    pub fn to_mal_type(&self) -> MalType {
+        match *self {
+            HashKey::String(ref s) => MalType::String(s.to_owned()),
+            HashKey::Keyword(ref s) => MalType::Keyword(s.to_owned())
+        }
+    }
+    pub fn into_mal_type(self) -> MalType {
+        match self {
+            HashKey::String(s) => MalType::String(s),
+            HashKey::Keyword(s) => MalType::Keyword(s)
+        }
+    }
+}
+
 impl MalType {
-    pub fn get_num(self) -> f64 {
+    pub fn into_hash_key(self) -> HashKey {
+        match self {
+            MalType::String(s) => HashKey::String(s),
+            MalType::Keyword(s) => HashKey::Keyword(s),
+            _ => unreachable!()
+        }
+    }
+
+    pub fn into_num(self) -> f64 {
         match self {
             MalType::Num(n) => n,
             _ => unreachable!(),
         }
     }
 
-    pub fn get_closure(self) -> Closure {
+    pub fn into_closure(self) -> Closure {
         match self {
             MalType::Closure(f) => f,
             _ => unreachable!(),
         }
     }
 
-    pub fn get_symbol(self) -> String {
+    pub fn into_symbol(self) -> String {
         match self {
             MalType::Symbol(s) => s,
             _ => unreachable!(),
         }
     }
 
-    pub fn get_symbol_ref(&self) -> &String {
+    pub fn to_symbol(&self) -> &String {
         match *self {
             MalType::Symbol(ref s) => s,
             _ => unreachable!(),
         }
     }
 
-    pub fn get_string(self) -> String {
+    pub fn into_string(self) -> String {
         match self {
             MalType::String(s) => s,
             _ => unreachable!(),
         }
     }
 
-    pub fn get_items(self) -> Vec<MalType> {
+    pub fn into_items(self) -> Vec<MalType> {
         match self {
             MalType::List(l) => l,
             MalType::Vec(l) => l,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn into_hashmap(self) -> HashMap<HashKey, MalType> {
+        match self {
             MalType::Hashmap(l) => l,
             _ => unreachable!(),
         }
     }
 
-    pub fn get_items_ref(&self) -> &Vec<MalType> {
+    pub fn to_items(&self) -> &Vec<MalType> {
         match *self {
             MalType::List(ref l) => l,
             MalType::Vec(ref l) => l,
-            MalType::Hashmap(ref l) => l,
             _ => unreachable!(),
         }
     }
 
-    pub fn get_symbol_list_ref(&self) -> Vec<String> {
+    pub fn to_symbol_list(&self) -> Vec<String> {
         let l = match *self {
             MalType::List(ref l) => l,
             MalType::Vec(ref l) => l,
-            MalType::Hashmap(ref l) => l,
             _ => unreachable!(),
         };
-        l.iter().map(|el| el.get_symbol_ref().to_owned()).collect()
+        l.iter().map(|el| el.to_symbol().to_owned()).collect()
     }
 
-    pub fn get_number(self) -> f64 {
+    pub fn into_number(self) -> f64 {
         match self {
             MalType::Num(n) => n,
             _ => unreachable!(),
         }
     }
 
-    pub fn get_atom(&self) -> MalType {
+    pub fn into_atom(&self) -> MalType {
         match *self {
             MalType::Atom(ref mal) => mal.borrow().clone(),
             _ => unreachable!(),
@@ -149,6 +183,12 @@ impl MalType {
 
     pub fn is_symbol(&self) -> bool {
         if let &MalType::Symbol(_) = self {
+            return true;
+        }
+        return false;
+    }
+    pub fn is_keyword(&self) -> bool {
+        if let &MalType::Keyword(_) = self {
             return true;
         }
         return false;
@@ -176,11 +216,11 @@ impl MalType {
     }
 
     pub fn is_collection(&self) -> bool {
-        return self.is_vec() || self.is_list() || self.is_hashmap();
+        return self.is_vec() || self.is_list();
     }
 
     pub fn is_empty_collection(&self) -> bool {
-        return self.is_empty_list() || self.is_empty_vec() || self.is_empty_hashmap();
+        return self.is_empty_list() || self.is_empty_vec();
     }
 
     pub fn is_list(&self) -> bool {
@@ -230,7 +270,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l) | MalType::Vec(ref l) | MalType::Hashmap(ref l) => {
+            MalType::List(ref l) | MalType::Vec(ref l) => {
                 l[0].is_symbol()
             }
             _ => unreachable!(),
@@ -243,7 +283,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l) | MalType::Vec(ref l) | MalType::Hashmap(ref l) => {
+            MalType::List(ref l) | MalType::Vec(ref l) => {
                 l[0].is_closure()
             }
             _ => unreachable!(),
@@ -256,7 +296,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l) | MalType::Vec(ref l) | MalType::Hashmap(ref l) => {
+            MalType::List(ref l) | MalType::Vec(ref l) => {
                 if l[0].is_symbol() {
                     Some(&l[0])
                 } else {

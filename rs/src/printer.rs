@@ -57,8 +57,10 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
         }
         MalType::Hashmap(hashmap) => {
             s.push_str("{");
-            for k in hashmap {
-                s.push_str(&pr_str(k, print_readably));
+            for (k, v) in hashmap.into_iter() {
+                s.push_str(&pr_str(&k.to_mal_type(), print_readably));
+                s.push_str(" ");
+                s.push_str(&pr_str(v, print_readably));
                 s.push_str(" ");
             }
             s = s.trim().to_string();

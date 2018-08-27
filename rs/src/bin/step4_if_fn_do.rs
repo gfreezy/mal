@@ -27,27 +27,27 @@ fn eval(mal: MalType, env: &mut Env) -> Fallible<MalType> {
         return eval_ast(mal, env);
     }
 
-    let mut list = mal.get_items();
+    let mut list = mal.into_items();
     let first_mal = list.remove(0);
 
     if first_mal.is_symbol() {
-        match first_mal.get_symbol_ref().as_ref() {
+        match first_mal.to_symbol().as_ref() {
             "def!" => {
                 ensure!(list.len() == 2, "def! should have 2 params");
-                let symbol_key = list.remove(0).get_symbol();
+                let symbol_key = list.remove(0).into_symbol();
                 let value = eval(list.remove(0), env)?;
                 return Ok(env.set(symbol_key, value));
             }
             "let*" => {
                 ensure!(list.len() == 2, "let* should have 2 params");
                 let mut new_env = Env::new(Some(env.clone()), Vec::new(), Vec::new());
-                let mut binding_list = list.remove(0).get_items();
+                let mut binding_list = list.remove(0).into_items();
                 ensure!(
                     binding_list.len() % 2 == 0,
                     "def! binding list should have 2n params"
                 );
                 while binding_list.len() >= 2 {
-                    let key = binding_list.remove(0).get_symbol();
+                    let key = binding_list.remove(0).into_symbol();
                     let value = eval(binding_list.remove(0), &mut new_env)?;
                     new_env.set(key, value);
                 }

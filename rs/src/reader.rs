@@ -2,6 +2,7 @@ use error::CommentFoundError;
 use failure::Fallible;
 use regex::Regex;
 use types::MalType;
+use std::collections::HashMap;
 
 struct Reader {
     tokens: Vec<String>,
@@ -125,7 +126,7 @@ fn read_vec(reader: &mut Reader) -> Fallible<MalType> {
 }
 
 fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
-    let mut ret = Vec::new();
+    let mut ret: Vec<MalType> = Vec::new();
     loop {
         reader.next();
 
@@ -134,7 +135,13 @@ fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
             Some(t) => t,
         };
         if c == "}" {
-            return Ok(MalType::Hashmap(ret));
+            let mut mapping = HashMap::new();
+            let mut drain = ret.drain(..);
+            while let Some(key) = drain.next() {
+                let value = drain.next().expect("get value");
+                mapping.insert(key.into_hash_key(), value);
+            }
+            return Ok(MalType::Hashmap(mapping));
         }
         let type_ = match read_form(reader) {
             Ok(t) => t,

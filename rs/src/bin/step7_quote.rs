@@ -27,16 +27,16 @@ fn quasiquote(ast: MalType) -> MalType {
         return MalType::List(vec![MalType::Symbol("quote".to_string()), ast]);
     }
 
-    let mut list = ast.get_items();
+    let mut list = ast.into_items();
     let first = list.remove(0);
-    if first.is_symbol() && first.get_symbol_ref() == "unquote" {
+    if first.is_symbol() && first.to_symbol() == "unquote" {
         return list.remove(0);
     }
 
     if is_pair(&first) {
-        let mut list_of_first = first.clone().get_items();
+        let mut list_of_first = first.clone().into_items();
         let first_of_first = list_of_first.remove(0);
-        if first_of_first.is_symbol() && first_of_first.get_symbol_ref() == "splice-unquote" {
+        if first_of_first.is_symbol() && first_of_first.to_symbol() == "splice-unquote" {
             let ret = vec![
                 MalType::Symbol("concat".to_string()),
                 list_of_first.remove(0),
@@ -56,7 +56,7 @@ fn quasiquote(ast: MalType) -> MalType {
 }
 
 pub fn is_pair(param: &MalType) -> bool {
-    param.is_collection() && param.get_items_ref().len() > 0
+    param.is_collection() && param.to_items().len() > 0
 }
 
 fn read(line: &str) -> Fallible<MalType> {
@@ -69,27 +69,27 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
             return eval_ast(mal, env.clone());
         }
 
-        let mut list = mal.get_items();
+        let mut list = mal.into_items();
         let first_mal = list.remove(0);
 
         if first_mal.is_symbol() {
-            match first_mal.get_symbol_ref().as_ref() {
+            match first_mal.to_symbol().as_ref() {
                 "def!" => {
                     ensure!(list.len() == 2, "def! should have 2 params");
-                    let symbol_key = list.remove(0).get_symbol();
+                    let symbol_key = list.remove(0).into_symbol();
                     let value = eval(list.remove(0), env.clone())?;
                     return Ok(env.set(symbol_key, value));
                 }
                 "let*" => {
                     ensure!(list.len() == 2, "let* should have 2 params");
                     let mut new_env = Env::new(Some(env.clone()), Vec::new(), Vec::new());
-                    let mut binding_list = list.remove(0).get_items();
+                    let mut binding_list = list.remove(0).into_items();
                     ensure!(
                         binding_list.len() % 2 == 0,
                         "def! binding list should have 2n params"
                     );
                     while binding_list.len() >= 2 {
-                        let key = binding_list.remove(0).get_symbol();
+                        let key = binding_list.remove(0).into_symbol();
                         let value = eval(binding_list.remove(0), new_env.clone())?;
                         new_env.set(key, value);
                     }
@@ -160,7 +160,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                         "swap!'s second param should be a func"
                     );
 
-                    let old_mal = atom.get_atom();
+                    let old_mal = atom.into_atom();
                     params.insert(0, old_mal);
                     if let MalType::Atom(a) = atom {
                         let new_mal = if func.is_closure() {

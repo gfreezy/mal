@@ -41,11 +41,11 @@ fn eval(s: MalType, env: &ReplEnv) -> Fallible<MalType> {
         return Ok(new_mal);
     }
 
-    let new_list = new_mal.get_items();
+    let new_list = new_mal.into_items();
     let func = new_list[0].clone().get_func();
     let args: Vec<f64> = new_list[1..]
         .iter()
-        .map(|mal| mal.clone().get_number())
+        .map(|mal| mal.clone().into_number())
         .collect();
 
     Ok(MalType::Num(func(args[0], args[1])))
