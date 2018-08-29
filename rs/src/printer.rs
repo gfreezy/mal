@@ -37,7 +37,7 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
             }
         }
         MalType::Num(num) => s.push_str(&format!("{}", num)),
-        MalType::List(list) => {
+        MalType::List(list, _) => {
             s.push_str("(");
             for t in list {
                 s.push_str(&pr_str(t, print_readably));
@@ -46,7 +46,7 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
             s = s.trim().to_string();
             s.push_str(")");
         }
-        MalType::Vec(list) => {
+        MalType::Vec(list, _) => {
             s.push_str("[");
             for t in list {
                 s.push_str(&pr_str(t, print_readably));
@@ -55,7 +55,7 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
             s = s.trim().to_string();
             s.push_str("]");
         }
-        MalType::Hashmap(hashmap) => {
+        MalType::Hashmap(hashmap, _) => {
             s.push_str("{");
             for (k, v) in hashmap.into_iter() {
                 s.push_str(&pr_str(&k.to_mal_type(), print_readably));
@@ -65,13 +65,6 @@ pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
             }
             s = s.trim().to_string();
             s.push_str("}");
-        }
-        MalType::WithMeta(vector, hashmap) => {
-            s.push_str("(with-meta ");
-            s.push_str(&pr_str(vector, print_readably));
-            s.push_str(" ");
-            s.push_str(&pr_str(hashmap, print_readably));
-            s.push_str(")");
         }
         MalType::Atom(atom) => {
             s.push_str("(atom ");

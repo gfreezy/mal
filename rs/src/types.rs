@@ -1,5 +1,6 @@
 use env::Env;
 use failure::Fallible;
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -8,19 +9,18 @@ pub type ClosureFunc = fn(Vec<MalType>, Option<Rc<ClosureEnv>>) -> Fallible<MalT
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MalType {
-    List(Vec<MalType>),
-    Vec(Vec<MalType>),
-    Hashmap(HashMap<HashKey, MalType>),
+    List(Vec<MalType>, Box<MalType>),
+    Vec(Vec<MalType>, Box<MalType>),
+    Hashmap(HashMap<HashKey, MalType>, Box<MalType>),
     Num(f64),
     Symbol(String),
     Keyword(String),
     String(String),
-    WithMeta(Box<MalType>, Box<MalType>),
     Nil,
     Bool(bool),
 
     Atom(Rc<RefCell<MalType>>),
-    Closure(Closure),
+    Closure(Closure, Box<MalType>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -102,7 +102,7 @@ impl MalType {
 
     pub fn into_closure(self) -> Closure {
         match self {
-            MalType::Closure(f) => f,
+            MalType::Closure(f, _) => f,
             _ => unreachable!(),
         }
     }
@@ -130,31 +130,31 @@ impl MalType {
 
     pub fn into_items(self) -> Vec<MalType> {
         match self {
-            MalType::List(l) => l,
-            MalType::Vec(l) => l,
+            MalType::List(l, ..) => l,
+            MalType::Vec(l, ..) => l,
             _ => unreachable!(),
         }
     }
 
     pub fn into_hashmap(self) -> HashMap<HashKey, MalType> {
         match self {
-            MalType::Hashmap(l) => l,
+            MalType::Hashmap(l, ..) => l,
             _ => unreachable!(),
         }
     }
 
     pub fn to_items(&self) -> &Vec<MalType> {
         match *self {
-            MalType::List(ref l) => l,
-            MalType::Vec(ref l) => l,
+            MalType::List(ref l, ..) => l,
+            MalType::Vec(ref l, ..) => l,
             _ => unreachable!(),
         }
     }
 
     pub fn to_symbol_list(&self) -> Vec<String> {
         let l = match *self {
-            MalType::List(ref l) => l,
-            MalType::Vec(ref l) => l,
+            MalType::List(ref l, ..) => l,
+            MalType::Vec(ref l, ..) => l,
             _ => unreachable!(),
         };
         l.iter().map(|el| el.to_symbol().to_owned()).collect()
@@ -169,7 +169,10 @@ impl MalType {
 
     pub fn to_atom(&self) -> MalType {
         match *self {
-            MalType::Atom(ref mal) => mal.borrow().clone(),
+            MalType::Atom(ref mal) => {
+                let s: &RefCell<MalType> = mal.borrow();
+                s.clone().into_inner()
+            }
             _ => unreachable!(),
         }
     }
@@ -209,7 +212,7 @@ impl MalType {
     }
 
     pub fn is_closure(&self) -> bool {
-        if let &MalType::Closure(_) = self {
+        if let &MalType::Closure(..) = self {
             return true;
         }
         return false;
@@ -224,41 +227,48 @@ impl MalType {
     }
 
     pub fn is_list(&self) -> bool {
-        if let &MalType::List(_) = self {
+        if let &MalType::List(..) = self {
+            return true;
+        }
+        return false;
+    }
+
+    pub fn is_string(&self) -> bool {
+        if let &MalType::String(..) = self {
             return true;
         }
         return false;
     }
 
     pub fn is_vec(&self) -> bool {
-        if let &MalType::Vec(_) = self {
+        if let &MalType::Vec(..) = self {
             return true;
         }
         return false;
     }
 
     pub fn is_hashmap(&self) -> bool {
-        if let &MalType::Hashmap(_) = self {
+        if let &MalType::Hashmap(..) = self {
             return true;
         }
         return false;
     }
     pub fn is_empty_list(&self) -> bool {
-        if let &MalType::List(ref list) = self {
+        if let MalType::List(ref list, ..) = *self {
             return list.is_empty();
         }
         return false;
     }
 
     pub fn is_empty_vec(&self) -> bool {
-        if let &MalType::Vec(ref list) = self {
+        if let MalType::Vec(ref list, ..) = *self {
             return list.is_empty();
         }
         return false;
     }
 
     pub fn is_empty_hashmap(&self) -> bool {
-        if let &MalType::Hashmap(ref list) = self {
+        if let MalType::Hashmap(ref list, ..) = *self {
             return list.is_empty();
         }
         return false;
@@ -270,7 +280,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l) | MalType::Vec(ref l) => l[0].is_symbol(),
+            MalType::List(ref l, ..) | MalType::Vec(ref l, ..) => l[0].is_symbol(),
             _ => unreachable!(),
         }
     }
@@ -281,7 +291,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l) | MalType::Vec(ref l) => l[0].is_closure(),
+            MalType::List(ref l, ..) | MalType::Vec(ref l, ..) => l[0].is_closure(),
             _ => unreachable!(),
         }
     }
@@ -292,7 +302,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l) | MalType::Vec(ref l) => {
+            MalType::List(ref l, ..) | MalType::Vec(ref l, ..) => {
                 if l[0].is_symbol() {
                     Some(&l[0])
                 } else {
@@ -305,15 +315,65 @@ impl MalType {
 
     pub fn set_is_macro(&mut self) {
         match *self {
-            MalType::Closure(ref mut c) => c.is_macro = true,
+            MalType::Closure(ref mut c, ..) => c.is_macro = true,
             _ => unreachable!(),
         }
     }
 
     pub fn is_macro_closure(&self) -> bool {
         match *self {
-            MalType::Closure(ref c) => c.is_macro,
+            MalType::Closure(ref c, ..) => c.is_macro,
             _ => unreachable!(),
         }
+    }
+
+    pub fn get_metadata(self) -> MalType {
+        let m = match self {
+            MalType::List(_, metadata) => metadata,
+            MalType::Vec(_, metadata) => metadata,
+            MalType::Hashmap(_, metadata) => metadata,
+            MalType::Closure(_, metadata) => metadata,
+            _ => unreachable!(),
+        };
+        *m
+    }
+}
+
+impl<'a> From<&'a String> for MalType {
+    fn from(token: &String) -> Self {
+        let mut new_token = String::with_capacity(token.capacity());
+
+        let mut chars = token.chars().skip(1).peekable();
+        while let Some(c) = chars.next() {
+            if c == '\\' {
+                match chars.peek() {
+                    Some('\\') => {
+                        new_token.push('\\');
+                        let _ = chars.next();
+                    }
+                    Some('n') => {
+                        new_token.push('\n');
+                        let _ = chars.next();
+                    }
+                    Some('t') => {
+                        new_token.push('\t');
+                        let _ = chars.next();
+                    }
+                    Some('"') => {
+                        new_token.push('"');
+                        let _ = chars.next();
+                    }
+                    _ => {
+                        new_token.push('\\');
+                    }
+                }
+            } else {
+                new_token.push(c);
+            }
+        }
+
+        let _ = new_token.pop();
+
+        MalType::String(new_token)
     }
 }

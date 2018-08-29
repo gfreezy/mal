@@ -45,7 +45,7 @@ fn tokenizer(s: &str) -> Vec<String> {
     for cap in RE.captures_iter(s) {
         caps.push(cap[1].to_string());
     }
-    //    println!("{:?}", caps);
+    //        println!("{:?}", caps);
     caps
 }
 
@@ -89,7 +89,7 @@ fn read_list(reader: &mut Reader) -> Fallible<MalType> {
             Some(t) => t,
         };
         if c == ")" {
-            return Ok(MalType::List(ret));
+            return Ok(MalType::List(ret, Box::new(MalType::Nil)));
         }
         let type_ = match read_form(reader) {
             Ok(t) => t,
@@ -112,7 +112,7 @@ fn read_vec(reader: &mut Reader) -> Fallible<MalType> {
             Some(t) => t,
         };
         if c == "]" {
-            return Ok(MalType::Vec(ret));
+            return Ok(MalType::Vec(ret, Box::new(MalType::Nil)));
         }
         let type_ = match read_form(reader) {
             Ok(t) => t,
@@ -141,7 +141,7 @@ fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
                 let value = drain.next().expect("get value");
                 mapping.insert(key.into_hash_key(), value);
             }
-            return Ok(MalType::Hashmap(mapping));
+            return Ok(MalType::Hashmap(mapping, Box::new(MalType::Nil)));
         }
         let type_ = match read_form(reader) {
             Ok(t) => t,
@@ -156,34 +156,40 @@ fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
 
 fn read_quote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(vec![
-        MalType::Symbol("quote".to_string()),
-        read_form(reader)?,
-    ]));
+    return Ok(MalType::List(
+        vec![MalType::Symbol("quote".to_string()), read_form(reader)?],
+        Box::new(MalType::Nil),
+    ));
 }
 
 fn read_quasiquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(vec![
-        MalType::Symbol("quasiquote".to_string()),
-        read_form(reader)?,
-    ]));
+    return Ok(MalType::List(
+        vec![
+            MalType::Symbol("quasiquote".to_string()),
+            read_form(reader)?,
+        ],
+        Box::new(MalType::Nil),
+    ));
 }
 
 fn read_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(vec![
-        MalType::Symbol("unquote".to_string()),
-        read_form(reader)?,
-    ]));
+    return Ok(MalType::List(
+        vec![MalType::Symbol("unquote".to_string()), read_form(reader)?],
+        Box::new(MalType::Nil),
+    ));
 }
 
 fn read_splice_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(vec![
-        MalType::Symbol("splice-unquote".to_string()),
-        read_form(reader)?,
-    ]));
+    return Ok(MalType::List(
+        vec![
+            MalType::Symbol("splice-unquote".to_string()),
+            read_form(reader)?,
+        ],
+        Box::new(MalType::Nil),
+    ));
 }
 
 fn read_symbol(reader: &mut Reader) -> Fallible<MalType> {
@@ -207,43 +213,7 @@ fn read_symbol(reader: &mut Reader) -> Fallible<MalType> {
 fn read_string(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
-        Some(token) => {
-            let mut new_token = String::with_capacity(token.capacity());
-
-            let mut chars = token.chars().skip(1).peekable();
-            while let Some(c) = chars.next() {
-                if c == '\\' {
-                    match chars.peek() {
-                        Some('\\') => {
-                            new_token.push('\\');
-                            let _ = chars.next();
-                        }
-                        Some('n') => {
-                            new_token.push('\n');
-                            let _ = chars.next();
-                        }
-                        Some('t') => {
-                            new_token.push('\t');
-                            let _ = chars.next();
-                        }
-                        Some('"') => {
-                            new_token.push('"');
-                            let _ = chars.next();
-                        }
-                        _ => {
-                            new_token.push('\\');
-                        }
-                    }
-                } else {
-                    new_token.push(c);
-                }
-            }
-
-            let _ = new_token.pop();
-
-            //            println!("{}", &new_token);
-            return Ok(MalType::String(new_token));
-        }
+        Some(token) => Ok(MalType::from(token)),
     }
 }
 
@@ -258,10 +228,13 @@ fn read_keyword(reader: &mut Reader) -> Fallible<MalType> {
 
 fn read_with_meta(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    let hashmap = read_form(reader)?;
+    let meta = read_form(reader)?;
     reader.next();
-    let vector = read_form(reader)?;
-    return Ok(MalType::WithMeta(Box::new(vector), Box::new(hashmap)));
+    let func = read_form(reader)?;
+    return Ok(MalType::List(
+        vec![MalType::Symbol("with-meta".to_string()), func, meta],
+        Box::new(MalType::Nil),
+    ));
 }
 
 fn read_deref(reader: &mut Reader) -> Fallible<MalType> {
@@ -269,10 +242,13 @@ fn read_deref(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
-            return Ok(MalType::List(vec![
-                MalType::Symbol("deref".to_string()),
-                MalType::Symbol(token.to_string()),
-            ]));
+            return Ok(MalType::List(
+                vec![
+                    MalType::Symbol("deref".to_string()),
+                    MalType::Symbol(token.to_string()),
+                ],
+                Box::new(MalType::Nil),
+            ));
         }
     }
 }

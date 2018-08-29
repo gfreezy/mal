@@ -59,12 +59,11 @@ impl Env {
     pub fn get(&self, key: &str) -> Option<MalType> {
         let env = self.find(key);
 
-        let ret = env.and_then(|env| {
+        env.and_then(|env| {
             let arena = env.arena.borrow();
             let node = arena.get(env.node_id).expect("get node");
-            node.data.get(key).map(|d| d.clone())
-        });
-        ret
+            node.data.get(key).cloned()
+        })
     }
 
     pub fn root(&self) -> Env {

@@ -9,6 +9,7 @@ extern crate lazy_static;
 extern crate indextree;
 #[macro_use]
 extern crate debug_stub_derive;
+extern crate time;
 
 pub mod core;
 pub mod env;

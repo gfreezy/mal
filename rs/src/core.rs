@@ -5,8 +5,11 @@ use reader::read_str;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
+use std::io::stdout;
+use std::io::Write;
+use std::io::{stdin, Read};
 use std::rc::Rc;
+use time;
 use types::ClosureEnv;
 use types::{Closure, MalType};
 
@@ -40,6 +43,7 @@ fn divide(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<
 
 fn prn(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     println!("{}", pr_str2(params, None)?.into_string());
+    stdout().flush()?;
     Ok(MalType::Nil)
 }
 
@@ -72,12 +76,13 @@ fn println2(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Ma
             .collect::<Vec<String>>()
             .join(" ")
     );
+    stdout().flush()?;
     Ok(MalType::Nil)
 }
 
 #[allow(unused_mut)]
 fn list(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
-    Ok(MalType::List(params))
+    Ok(MalType::List(params, Box::new(MalType::Nil)))
 }
 
 fn is_list(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -115,10 +120,10 @@ fn eq(left: MalType, right: MalType) -> bool {
             return false;
         }
 
-        return inner_left
+        inner_left
             .into_iter()
             .zip(inner_right)
-            .all(|(l, r)| eq(l, r));
+            .all(|(l, r)| eq(l, r))
     } else if left.is_hashmap() && right.is_hashmap() {
         let inner_left = left.into_hashmap();
         let mut inner_right = right.into_hashmap();
@@ -228,7 +233,7 @@ fn cons(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Ma
     ensure!(list.is_collection(), "cons' second param should be list");
     let mut l = list.into_items();
     l.insert(0, first);
-    Ok(MalType::List(l))
+    Ok(MalType::List(l, Box::new(MalType::Nil)))
 }
 
 fn concat(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -242,6 +247,7 @@ fn concat(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalT
             .map(|mal| mal.into_items())
             .collect::<Vec<Vec<MalType>>>()
             .concat(),
+        Box::new(MalType::Nil),
     ))
 }
 
@@ -259,7 +265,7 @@ fn nth(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Mal
     ensure!(list.is_collection(), "nth's second param should be list");
     let mut l = list.into_items();
     ensure!(l.len() > index, "nth no enough items in list");
-    return Ok(l.remove(index));
+    Ok(l.remove(index))
 }
 
 fn first(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -270,19 +276,19 @@ fn first(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<M
     }
     ensure!(list.is_collection(), "first's param should be list or nil");
     let mut l = list.into_items();
-    return Ok(l.remove(0));
+    Ok(l.remove(0))
 }
 
 fn rest(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "rest should have 1 params");
     let list = params.remove(0);
     if list.is_nil() || list.is_empty_collection() {
-        return Ok(MalType::List(Vec::new()));
+        return Ok(MalType::List(Vec::new(), Box::new(MalType::Nil)));
     }
     ensure!(list.is_collection(), "rest's param should be list or nil");
     let mut l = list.into_items();
     l.remove(0);
-    return Ok(MalType::List(l));
+    Ok(MalType::List(l, Box::new(MalType::Nil)))
 }
 
 fn throw(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -313,6 +319,7 @@ fn map(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Mal
             .into_iter()
             .map(|mal| f.call(vec![mal]))
             .collect::<Fallible<Vec<MalType>>>()?,
+        Box::new(MalType::Nil),
     ))
 }
 
@@ -336,6 +343,21 @@ fn is_symbol(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallib
     Ok(MalType::Bool(params.remove(0).is_symbol()))
 }
 
+fn is_number(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "number? should have 1 params");
+    Ok(MalType::Bool(params.remove(0).is_num()))
+}
+
+fn is_fn(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "fn? should have 1 params");
+    Ok(MalType::Bool(params.remove(0).is_closure()))
+}
+
+fn is_macro(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "macro? should have 1 params");
+    Ok(MalType::Bool(params.remove(0).is_macro_closure()))
+}
+
 fn symbol(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "symbol should have 1 param");
     let s = params.remove(0).into_string();
@@ -354,7 +376,7 @@ fn is_keyword(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Falli
 }
 
 fn vector(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
-    Ok(MalType::Vec(params))
+    Ok(MalType::Vec(params, Box::new(MalType::Nil)))
 }
 
 fn is_vector(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -373,12 +395,17 @@ fn hashmap(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible
         let value = drain.next().expect("get value");
         map.insert(key.into_hash_key(), value);
     }
-    Ok(MalType::Hashmap(map))
+    Ok(MalType::Hashmap(map, Box::new(MalType::Nil)))
 }
 
 fn is_map(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "is_map should have 1 params");
     Ok(MalType::Bool(params.remove(0).is_hashmap()))
+}
+
+fn is_string(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "string? should have 1 params");
+    Ok(MalType::Bool(params.remove(0).is_string()))
 }
 
 fn assoc(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -393,7 +420,7 @@ fn assoc(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<M
         let value = drain.next().expect("get value");
         map.insert(key.into_hash_key(), value);
     }
-    Ok(MalType::Hashmap(map))
+    Ok(MalType::Hashmap(map, Box::new(MalType::Nil)))
 }
 
 fn dissoc(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -402,7 +429,7 @@ fn dissoc(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<
     for k in keys {
         map.remove(&k.into_hash_key());
     }
-    Ok(MalType::Hashmap(map))
+    Ok(MalType::Hashmap(map, Box::new(MalType::Nil)))
 }
 
 fn get(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -426,12 +453,16 @@ fn keys(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Ma
     let mut map = params.remove(0).into_hashmap();
     Ok(MalType::List(
         map.drain().map(|(k, _)| k.into_mal_type()).collect(),
+        Box::new(MalType::Nil),
     ))
 }
 
 fn vals(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     let mut map = params.remove(0).into_hashmap();
-    Ok(MalType::List(map.drain().map(|(_, v)| v).collect()))
+    Ok(MalType::List(
+        map.drain().map(|(_, v)| v).collect(),
+        Box::new(MalType::Nil),
+    ))
 }
 
 fn is_sequential(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -439,6 +470,113 @@ fn is_sequential(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fa
     Ok(MalType::Bool(l.is_collection()))
 }
 
+fn readline(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "readline should have 1 params");
+    let prompt = params.remove(0);
+    print!("{}", prompt.into_string());
+    stdout().flush()?;
+    let mut buf = String::new();
+    let _ = stdin().read_line(&mut buf)?;
+    if buf == "" {
+        return Ok(MalType::Nil);
+    }
+    Ok(MalType::String(buf.trim_right().to_string()))
+}
+
+fn meta(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "meta should have 1 params");
+    let s = params.remove(0);
+    Ok(s.get_metadata())
+}
+
+fn with_meta(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 2, "with_meta should have 2 params");
+    let source = params.remove(0);
+    let metadata = params.remove(0);
+    Ok(match source {
+        MalType::List(l, ..) => MalType::List(l, Box::new(metadata)),
+        MalType::Vec(l, ..) => MalType::Vec(l, Box::new(metadata)),
+        MalType::Hashmap(l, ..) => MalType::Hashmap(l, Box::new(metadata)),
+        MalType::Closure(l, ..) => MalType::Closure(l, Box::new(metadata)),
+        _ => unreachable!(),
+    })
+}
+
+fn time_ms(params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 0, "time_ms should have 0 params");
+    let t = time::get_time();
+    Ok(MalType::Num(
+        t.sec as f64 * 1000.0 + (t.nsec / 1000 / 1000) as f64,
+    ))
+}
+
+fn conj(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    let collection = params.remove(0);
+    Ok(match collection {
+        MalType::Vec(mut l, meta) => {
+            l.extend(params);
+            MalType::Vec(l, meta)
+        }
+        MalType::List(mut l, meta) => {
+            for i in params {
+                l.insert(0, i);
+            }
+            MalType::List(l, meta)
+        }
+        _ => unreachable!(),
+    })
+}
+
+fn swap(mut params: Vec<MalType>, c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() >= 2, "swap! should have more than 2 params");
+    let atom = params.remove(0);
+    let func = params.remove(0);
+    ensure!(atom.is_atom(), "swap!'s first param should be of type atom");
+    ensure!(func.is_closure(), "swap!'s second param should be a func");
+
+    let old_mal = atom.to_atom();
+    params.insert(0, old_mal);
+    if let MalType::Atom(a) = atom {
+        let new_mal = func.into_closure().call(params)?;
+        let _ = a.replace(new_mal.clone());
+        return Ok(new_mal);
+    }
+
+    unreachable!()
+}
+
+fn seq(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+    ensure!(params.len() == 1, "seq should have 1 params");
+    let p = params.remove(0);
+    Ok(match p {
+        MalType::List(l, m) => {
+            if !l.is_empty() {
+                MalType::List(l, m)
+            } else {
+                MalType::Nil
+            }
+        }
+        MalType::Vec(l, m) => {
+            if !l.is_empty() {
+                MalType::List(l, m)
+            } else {
+                MalType::Nil
+            }
+        }
+        MalType::Nil => MalType::Nil,
+        MalType::String(s) => {
+            if !s.is_empty() {
+                MalType::List(
+                    s.chars().map(|c| MalType::String(c.to_string())).collect(),
+                    Box::new(MalType::Nil),
+                )
+            } else {
+                MalType::Nil
+            }
+        }
+        _ => unreachable!(),
+    })
+}
 pub struct Ns {
     pub map: HashMap<String, Closure>,
 }
@@ -488,6 +626,8 @@ impl Ns {
         mapping.insert("vector?".to_string(), Closure::new(is_vector, None));
         mapping.insert("hash-map".to_string(), Closure::new(hashmap, None));
         mapping.insert("map?".to_string(), Closure::new(is_map, None));
+        mapping.insert("number?".to_string(), Closure::new(is_number, None));
+        mapping.insert("string?".to_string(), Closure::new(is_string, None));
         mapping.insert("assoc".to_string(), Closure::new(assoc, None));
         mapping.insert("dissoc".to_string(), Closure::new(dissoc, None));
         mapping.insert("get".to_string(), Closure::new(get, None));
@@ -495,6 +635,15 @@ impl Ns {
         mapping.insert("keys".to_string(), Closure::new(keys, None));
         mapping.insert("vals".to_string(), Closure::new(vals, None));
         mapping.insert("sequential?".to_string(), Closure::new(is_sequential, None));
+        mapping.insert("readline".to_string(), Closure::new(readline, None));
+        mapping.insert("meta".to_string(), Closure::new(meta, None));
+        mapping.insert("with-meta".to_string(), Closure::new(with_meta, None));
+        mapping.insert("conj".to_string(), Closure::new(conj, None));
+        mapping.insert("seq".to_string(), Closure::new(seq, None));
+        mapping.insert("fn?".to_string(), Closure::new(is_fn, None));
+        mapping.insert("macro?".to_string(), Closure::new(is_macro, None));
+        mapping.insert("time-ms".to_string(), Closure::new(time_ms, None));
+        mapping.insert("swap!".to_string(), Closure::new(swap, None));
 
         Ns { map: mapping }
     }
