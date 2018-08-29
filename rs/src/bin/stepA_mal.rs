@@ -93,10 +93,10 @@ fn quasiquote(ast: MalType) -> MalType {
 }
 
 fn is_pair(param: &MalType) -> bool {
-    param.is_collection() && param.to_items().len() > 0
+    param.is_collection() && param.to_items().is_empty()
 }
 
-fn is_macro_call(ast: &MalType, env: Env) -> bool {
+fn is_macro_call(ast: &MalType, env: &Env) -> bool {
     if ast.did_collection_have_leading_symbol() {
         let items = ast.to_items();
         let symbol = env.get(items[0].to_symbol());
@@ -106,8 +106,8 @@ fn is_macro_call(ast: &MalType, env: Env) -> bool {
     false
 }
 
-fn macroexpand(mut ast: MalType, env: Env) -> Fallible<MalType> {
-    while is_macro_call(&ast, env.clone()) {
+fn macroexpand(mut ast: MalType, env: &Env) -> Fallible<MalType> {
+    while is_macro_call(&ast, env) {
         let mut items = ast.into_items();
         let first_el = items.remove(0);
         let func = env.get(first_el.to_symbol()).expect("get macro func");
@@ -123,12 +123,12 @@ fn read(line: &str) -> Fallible<MalType> {
 fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
     loop {
         if !mal.is_list() || mal.is_empty_list() {
-            return eval_ast(mal, env.clone());
+            return eval_ast(mal, &env);
         }
 
-        mal = macroexpand(mal, env.clone())?;
+        mal = macroexpand(mal, &env)?;
         if !mal.is_list() || mal.is_empty_list() {
-            return eval_ast(mal, env.clone());
+            return eval_ast(mal, &env);
         }
 
         let mut list = mal.into_items();
@@ -179,7 +179,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     let condition = eval(condition_expr, env.clone())?;
                     return match condition {
                         MalType::Nil | MalType::Bool(false) => {
-                            if list.len() > 0 {
+                            if list.is_empty() {
                                 let else_clause = list.remove(0);
                                 mal = else_clause;
                                 continue;
@@ -228,7 +228,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     return Ok(env.set(symbol_key, value));
                 }
                 "macroexpand" => {
-                    return macroexpand(list.remove(0), env.clone());
+                    return macroexpand(list.remove(0), &env);
                 }
                 "try*" => {
                     ensure!(list.len() == 2, "try* should have 2 params");
@@ -289,29 +289,23 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
     }
 }
 
-fn eval_ast(ast: MalType, env: Env) -> Fallible<MalType> {
+fn eval_ast(ast: MalType, env: &Env) -> Fallible<MalType> {
     match ast {
-        MalType::Symbol(s) => {
-            return env
-                .get(&s)
-                .map_or(Err(format_err!("'{}' not found", s)), |f| Ok(f.clone()));
-        }
-        MalType::List(list, ..) => {
-            return Ok(MalType::List(
-                list.into_iter()
-                    .map(|el| eval(el, env.clone()))
-                    .collect::<Fallible<Vec<MalType>>>()?,
-                Box::new(MalType::Nil),
-            ))
-        }
-        MalType::Vec(list, ..) => {
-            return Ok(MalType::Vec(
-                list.into_iter()
-                    .map(|el| eval(el, env.clone()))
-                    .collect::<Fallible<Vec<MalType>>>()?,
-                Box::new(MalType::Nil),
-            ))
-        }
+        MalType::Symbol(s) => env
+            .get(&s)
+            .map_or(Err(format_err!("'{}' not found", s)), |f| Ok(f.clone())),
+        MalType::List(list, ..) => Ok(MalType::List(
+            list.into_iter()
+                .map(|el| eval(el, env.clone()))
+                .collect::<Fallible<Vec<MalType>>>()?,
+            Box::new(MalType::Nil),
+        )),
+        MalType::Vec(list, ..) => Ok(MalType::Vec(
+            list.into_iter()
+                .map(|el| eval(el, env.clone()))
+                .collect::<Fallible<Vec<MalType>>>()?,
+            Box::new(MalType::Nil),
+        )),
         MalType::Hashmap(mapping, ..) => {
             let mut new_mapping = HashMap::new();
             for (k, v) in mapping {
@@ -319,7 +313,7 @@ fn eval_ast(ast: MalType, env: Env) -> Fallible<MalType> {
             }
             Ok(MalType::Hashmap(new_mapping, Box::new(MalType::Nil)))
         }
-        _ => return Ok(ast),
+        _ => Ok(ast),
     }
 }
 
@@ -327,10 +321,8 @@ fn print(s: &MalType) -> String {
     pr_str(s, true)
 }
 
-fn rep(s: &str, env: Env) -> Fallible<String> {
-    let ret = Ok(print(&eval(read(s)?, env.clone())?));
-    //    println!("env: {}", env);
-    return ret;
+fn rep(s: &str, env: &Env) -> Fallible<String> {
+    Ok(print(&eval(read(s)?, env.clone())?))
 }
 
 fn main() -> Fallible<()> {
@@ -346,30 +338,30 @@ fn main() -> Fallible<()> {
         "*host-language*".to_string(),
         MalType::String("mal".to_string()),
     );
-    let _ = rep("(def! not (fn* (a) (if a false true)))", repl_env.clone())?;
+    let _ = rep("(def! not (fn* (a) (if a false true)))", &repl_env)?;
     let _ = rep(
         r#"(def! load-file (fn* (f) (eval (read-string (str "(do " (slurp f) ")")))))"#,
-        repl_env.clone(),
+        &repl_env,
     )?;
-    let _ = rep(r#"(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw "odd number of forms to cond")) (cons 'cond (rest (rest xs)))))))"#, repl_env.clone())?;
-    let _ = rep(r#"(defmacro! or (fn* (& xs) (if (empty? xs) nil (if (= 1 (count xs)) (first xs) `(let* (or_FIXME ~(first xs)) (if or_FIXME or_FIXME (or ~@(rest xs))))))))"#, repl_env.clone())?;
+    let _ = rep(r#"(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw "odd number of forms to cond")) (cons 'cond (rest (rest xs)))))))"#, &repl_env)?;
+    let _ = rep(r#"(defmacro! or (fn* (& xs) (if (empty? xs) nil (if (= 1 (count xs)) (first xs) `(let* (or_FIXME ~(first xs)) (if or_FIXME or_FIXME (or ~@(rest xs))))))))"#, &repl_env)?;
     let _ = rep(r#"
     (def! *gensym-counter* (atom 0))
 
     (def! gensym (fn* [] (symbol (str \"G__\" (swap! *gensym-counter* (fn* [x] (+ 1 x)))))))
 
     (defmacro! or (fn* (& xs) (if (empty? xs) nil (if (= 1 (count xs)) (first xs) (let* (condvar (gensym)) `(let* (~condvar ~(first xs)) (if ~condvar ~condvar (or ~@(rest xs)))))))))
-    "#, repl_env.clone());
+    "#, &repl_env);
     let mut args: Vec<String> = env::args().collect();
     let _self_name = args.remove(0);
 
     let mut filename = None;
-    if args.len() > 0 {
+    if args.is_empty() {
         filename = Some(args.remove(0));
         repl_env.set(
             "*ARGV*".to_string(),
             MalType::List(
-                args.into_iter().map(|e| MalType::String(e)).collect(),
+                args.into_iter().map(MalType::String).collect(),
                 Box::new(MalType::Nil),
             ),
         );
@@ -382,24 +374,21 @@ fn main() -> Fallible<()> {
 
     match filename {
         Some(filename) => {
-            let _ = rep(format!(r#"(load-file "{}")"#, filename).as_ref(), repl_env)?;
+            let _ = rep(format!(r#"(load-file "{}")"#, filename).as_ref(), &repl_env)?;
         }
         None => {
             let mut rl = Editor::<()>::new();
             if rl.load_history(HIST_PATH).is_err() {
                 println!("No previous history.")
             }
-            let _ = rep(
-                r#"(println (str "Mal [" *host-language* "]"))"#,
-                repl_env.clone(),
-            )?;
+            let _ = rep(r#"(println (str "Mal [" *host-language* "]"))"#, &repl_env)?;
 
             loop {
                 let line = rl.readline("user> ");
                 match line {
                     Ok(line) => {
                         rl.add_history_entry(line.as_ref());
-                        match rep(line.as_ref(), repl_env.clone()) {
+                        match rep(line.as_ref(), &repl_env) {
                             Ok(s) => println!("{}", s),
                             Err(e) => {
                                 let downcast = e.downcast::<CommentFoundError>();
