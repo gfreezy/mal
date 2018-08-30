@@ -350,7 +350,8 @@ fn is_number(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallib
 
 fn is_fn(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "fn? should have 1 params");
-    Ok(MalType::Bool(params.remove(0).is_closure()))
+    let p = params.remove(0);
+    Ok(MalType::Bool(p.is_closure() && !p.is_macro_closure()))
 }
 
 fn is_macro(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -527,7 +528,7 @@ fn conj(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<Ma
     })
 }
 
-fn swap(mut params: Vec<MalType>, c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+fn swap(mut params: Vec<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() >= 2, "swap! should have more than 2 params");
     let atom = params.remove(0);
     let func = params.remove(0);

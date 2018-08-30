@@ -93,7 +93,7 @@ fn quasiquote(ast: MalType) -> MalType {
 }
 
 fn is_pair(param: &MalType) -> bool {
-    param.is_collection() && param.to_items().is_empty()
+    param.is_collection() && !param.to_items().is_empty()
 }
 
 fn is_macro_call(ast: &MalType, env: &Env) -> bool {
@@ -179,7 +179,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     let condition = eval(condition_expr, env.clone())?;
                     return match condition {
                         MalType::Nil | MalType::Bool(false) => {
-                            if list.is_empty() {
+                            if !list.is_empty() {
                                 let else_clause = list.remove(0);
                                 mal = else_clause;
                                 continue;
@@ -282,7 +282,40 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     .into_iter()
                     .map(|el| eval(el, env.clone()))
                     .collect::<Fallible<Vec<MalType>>>()?;
-                closure.call(params)
+
+                let c_env = closure.c_env.clone();
+                if let Some(c_env) = c_env {
+                    let mut exprs = params;
+                    let mut binds = c_env.parameters.to_symbol_list();
+
+                    let idx = binds.iter().position(|e| *e == "&");
+
+                    let new_env = if let Some(idx) = idx {
+                        ensure!(binds.len() == idx + 2, "& must be followed by a param name");
+                        ensure!(exprs.len() >= idx, "closure arguments not match params");
+
+                        // drop "&"
+                        binds.remove(idx);
+                        let positioned_args: Vec<MalType> = exprs.drain(0..idx).collect();
+                        let varargs = exprs;
+                        let mut exprs = positioned_args;
+                        exprs.push(MalType::List(varargs, Box::new(MalType::Nil)));
+                        Env::new(Some(c_env.env.clone()), binds, exprs)
+                    } else {
+                        ensure!(
+                            exprs.len() == binds.len(),
+                            "closure arguments not match params"
+                        );
+                        Env::new(Some(c_env.env.clone()), binds, exprs)
+                    };
+
+                    // eval(c_env.body.clone(), new_env)
+                    mal = c_env.body.clone();
+                    env = new_env;
+                    continue;
+                } else {
+                    closure.call(params)
+                }
             }
             _ => bail!("{:?} is not a function", new_first_mal),
         };
@@ -345,18 +378,15 @@ fn main() -> Fallible<()> {
     )?;
     let _ = rep(r#"(defmacro! cond (fn* (& xs) (if (> (count xs) 0) (list 'if (first xs) (if (> (count xs) 1) (nth xs 1) (throw "odd number of forms to cond")) (cons 'cond (rest (rest xs)))))))"#, &repl_env)?;
     let _ = rep(r#"(defmacro! or (fn* (& xs) (if (empty? xs) nil (if (= 1 (count xs)) (first xs) `(let* (or_FIXME ~(first xs)) (if or_FIXME or_FIXME (or ~@(rest xs))))))))"#, &repl_env)?;
-    let _ = rep(r#"
-    (def! *gensym-counter* (atom 0))
-
-    (def! gensym (fn* [] (symbol (str \"G__\" (swap! *gensym-counter* (fn* [x] (+ 1 x)))))))
-
-    (defmacro! or (fn* (& xs) (if (empty? xs) nil (if (= 1 (count xs)) (first xs) (let* (condvar (gensym)) `(let* (~condvar ~(first xs)) (if ~condvar ~condvar (or ~@(rest xs)))))))))
-    "#, &repl_env);
+    let _ = rep(r#"(do (def! *gensym-counter* (atom 0))
+    (def! gensym (fn* [] (symbol (str "G__" (swap! *gensym-counter* (fn* [x] (+ 1 x)))))))
+    (defmacro! or (fn* (& xs) (if (empty? xs) nil (if (= 1 (count xs)) (first xs) (let* (condvar (gensym)) `(let* (~condvar ~(first xs)) (if ~condvar ~condvar (or ~@(rest xs))))))))))
+    "#, &repl_env)?;
     let mut args: Vec<String> = env::args().collect();
     let _self_name = args.remove(0);
 
     let mut filename = None;
-    if args.is_empty() {
+    if !args.is_empty() {
         filename = Some(args.remove(0));
         repl_env.set(
             "*ARGV*".to_string(),

@@ -323,7 +323,7 @@ impl MalType {
     pub fn is_macro_closure(&self) -> bool {
         match *self {
             MalType::Closure(ref c, ..) => c.is_macro,
-            _ => unreachable!(),
+            _ => false,
         }
     }
 
