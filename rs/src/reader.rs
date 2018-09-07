@@ -3,6 +3,7 @@ use failure::Fallible;
 use regex::Regex;
 use std::collections::HashMap;
 use types::MalType;
+use std::collections::LinkedList;
 
 struct Reader {
     tokens: Vec<String>,
@@ -80,7 +81,7 @@ fn read_form(reader: &mut Reader) -> Fallible<MalType> {
 }
 
 fn read_list(reader: &mut Reader) -> Fallible<MalType> {
-    let mut ret = Vec::new();
+    let mut ret = LinkedList::new();
     loop {
         reader.next();
 
@@ -98,12 +99,12 @@ fn read_list(reader: &mut Reader) -> Fallible<MalType> {
                 continue;
             }
         };
-        ret.push(type_);
+        ret.push_back(type_);
     }
 }
 
 fn read_vec(reader: &mut Reader) -> Fallible<MalType> {
-    let mut ret = Vec::new();
+    let mut ret = LinkedList::new();
     loop {
         reader.next();
 
@@ -121,7 +122,7 @@ fn read_vec(reader: &mut Reader) -> Fallible<MalType> {
                 continue;
             }
         };
-        ret.push(type_);
+        ret.push_back(type_);
     }
 }
 
@@ -157,7 +158,7 @@ fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
 fn read_quote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     return Ok(MalType::List(
-        vec![MalType::Symbol("quote".to_string()), read_form(reader)?],
+        linked_list![MalType::Symbol("quote".to_string()), read_form(reader)?],
         Box::new(MalType::Nil),
     ));
 }
@@ -165,7 +166,7 @@ fn read_quote(reader: &mut Reader) -> Fallible<MalType> {
 fn read_quasiquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     return Ok(MalType::List(
-        vec![
+        linked_list![
             MalType::Symbol("quasiquote".to_string()),
             read_form(reader)?,
         ],
@@ -176,7 +177,7 @@ fn read_quasiquote(reader: &mut Reader) -> Fallible<MalType> {
 fn read_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     return Ok(MalType::List(
-        vec![MalType::Symbol("unquote".to_string()), read_form(reader)?],
+        linked_list![MalType::Symbol("unquote".to_string()), read_form(reader)?],
         Box::new(MalType::Nil),
     ));
 }
@@ -184,7 +185,7 @@ fn read_unquote(reader: &mut Reader) -> Fallible<MalType> {
 fn read_splice_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     return Ok(MalType::List(
-        vec![
+        linked_list![
             MalType::Symbol("splice-unquote".to_string()),
             read_form(reader)?,
         ],
@@ -232,7 +233,7 @@ fn read_with_meta(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     let func = read_form(reader)?;
     return Ok(MalType::List(
-        vec![MalType::Symbol("with-meta".to_string()), func, meta],
+        linked_list![MalType::Symbol("with-meta".to_string()), func, meta],
         Box::new(MalType::Nil),
     ));
 }
@@ -243,7 +244,7 @@ fn read_deref(reader: &mut Reader) -> Fallible<MalType> {
         None => unreachable!(),
         Some(token) => {
             return Ok(MalType::List(
-                vec![
+                linked_list![
                     MalType::Symbol("deref".to_string()),
                     MalType::Symbol(token.to_string()),
                 ],

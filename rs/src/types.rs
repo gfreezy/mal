@@ -1,16 +1,32 @@
 use env::Env;
 use failure::Fallible;
+use std::collections::LinkedList;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-pub type ClosureFunc = fn(Vec<MalType>, Option<Rc<ClosureEnv>>) -> Fallible<MalType>;
+pub type ClosureFunc = fn(LinkedList<MalType>, Option<Rc<ClosureEnv>>) -> Fallible<MalType>;
+
+#[macro_export]
+macro_rules! linked_list {
+    ($($arg:expr),*) => {{
+        let mut v: LinkedList<MalType> = LinkedList::new();
+        $(v.push_back($arg);)*
+        v
+    }};
+    ($($arg:expr),*,) => {{
+        let mut v: LinkedList<MalType> = LinkedList::new();
+        $(v.push_back($arg);)*
+        v
+    }}
+}
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MalType {
-    List(Vec<MalType>, Box<MalType>),
-    Vec(Vec<MalType>, Box<MalType>),
+    List(LinkedList<MalType>, Box<MalType>),
+    Vec(LinkedList<MalType>, Box<MalType>),
     Hashmap(HashMap<HashKey, MalType>, Box<MalType>),
     Num(f64),
     Symbol(String),
@@ -57,7 +73,7 @@ impl Closure {
         }
     }
 
-    pub fn call(&self, params: Vec<MalType>) -> Fallible<MalType> {
+    pub fn call(&self, params: LinkedList<MalType>) -> Fallible<MalType> {
         let f = &self.func;
         f(params, self.c_env.clone())
     }
@@ -128,7 +144,7 @@ impl MalType {
         }
     }
 
-    pub fn into_items(self) -> Vec<MalType> {
+    pub fn into_items(self) -> LinkedList<MalType> {
         match self {
             MalType::List(l, ..) => l,
             MalType::Vec(l, ..) => l,
@@ -143,7 +159,7 @@ impl MalType {
         }
     }
 
-    pub fn to_items(&self) -> &Vec<MalType> {
+    pub fn to_items(&self) -> &LinkedList<MalType> {
         match *self {
             MalType::List(ref l, ..) => l,
             MalType::Vec(ref l, ..) => l,
@@ -280,7 +296,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l, ..) | MalType::Vec(ref l, ..) => l[0].is_symbol(),
+            MalType::List(ref l, ..) | MalType::Vec(ref l, ..) => l.front().unwrap().is_symbol(),
             _ => unreachable!(),
         }
     }
@@ -291,7 +307,7 @@ impl MalType {
         }
 
         match *self {
-            MalType::List(ref l, ..) | MalType::Vec(ref l, ..) => l[0].is_closure(),
+            MalType::List(ref l, ..) | MalType::Vec(ref l, ..) => l.front().unwrap().is_closure(),
             _ => unreachable!(),
         }
     }
@@ -303,8 +319,8 @@ impl MalType {
 
         match *self {
             MalType::List(ref l, ..) | MalType::Vec(ref l, ..) => {
-                if l[0].is_symbol() {
-                    Some(&l[0])
+                if l.front().unwrap().is_symbol() {
+                    l.front()
                 } else {
                     None
                 }

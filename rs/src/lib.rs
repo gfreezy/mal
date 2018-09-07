@@ -12,9 +12,11 @@ extern crate debug_stub_derive;
 extern crate time;
 extern crate fnv;
 
+#[macro_use]
+pub mod types;
 pub mod core;
 pub mod env;
 pub mod error;
 pub mod printer;
 pub mod reader;
-pub mod types;
+
