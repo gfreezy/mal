@@ -1,6 +1,6 @@
 use indextree::{Arena, NodeId};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -10,7 +10,7 @@ use types::MalType;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Env {
     node_id: NodeId,
-    arena: Rc<RefCell<Arena<HashMap<String, MalType>>>>,
+    arena: Rc<RefCell<Arena<FnvHashMap<String, MalType>>>>,
 }
 
 impl Env {
@@ -19,7 +19,7 @@ impl Env {
             None => Rc::new(RefCell::new(Arena::new())),
             Some(ref outer) => outer.arena.clone(),
         };
-        let node_id = arena.borrow_mut().new_node(HashMap::new());
+        let node_id = arena.borrow_mut().new_node(FnvHashMap::default());
         let mut env = Env {
             node_id,
             arena: arena.clone(),

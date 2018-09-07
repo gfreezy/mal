@@ -326,7 +326,7 @@ fn eval_ast(ast: MalType, env: &Env) -> Fallible<MalType> {
     match ast {
         MalType::Symbol(s) => env
             .get(&s)
-            .map_or(Err(format_err!("'{}' not found", s)), |f| Ok(f.clone())),
+            .map_or(Err(format_err!("'{}' not found", s)), |f| Ok(f)),
         MalType::List(list, ..) => Ok(MalType::List(
             list.into_iter()
                 .map(|el| eval(el, env.clone()))

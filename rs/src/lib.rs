@@ -10,6 +10,7 @@ extern crate indextree;
 #[macro_use]
 extern crate debug_stub_derive;
 extern crate time;
+extern crate fnv;
 
 pub mod core;
 pub mod env;
