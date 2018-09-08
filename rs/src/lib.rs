@@ -6,7 +6,7 @@ extern crate failure;
 extern crate regex;
 #[macro_use]
 extern crate lazy_static;
-extern crate indextree;
+extern crate generational_arena;
 #[macro_use]
 extern crate debug_stub_derive;
 extern crate time;

@@ -141,7 +141,8 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     ensure!(list.len() == 2, "def! should have 2 params");
                     let symbol_key = list.pop_front().unwrap().into_symbol();
                     let value = eval(list.pop_front().unwrap(), env.clone())?;
-                    return Ok(env.set(symbol_key, value));
+                    env.set(symbol_key, value.clone());
+                    return Ok(value);
                 }
                 "let*" => {
                     ensure!(list.len() == 2, "let* should have 2 params");
@@ -178,14 +179,14 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     let condition_expr = list.pop_front().unwrap();
                     let then_clause = list.pop_front().unwrap();
                     let condition = eval(condition_expr, env.clone())?;
-                    return match condition {
+                    match condition {
                         MalType::Nil | MalType::Bool(false) => {
                             if !list.is_empty() {
                                 let else_clause = list.pop_front().unwrap();
                                 mal = else_clause;
                                 continue;
                             } else {
-                                Ok(MalType::Nil)
+                                return Ok(MalType::Nil);
                             }
                         }
                         _ => {
@@ -226,7 +227,8 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                         "defmacro!'s second param should evaluate to func"
                     );
                     value.set_is_macro();
-                    return Ok(env.set(symbol_key, value));
+                    env.set(symbol_key, value.clone());
+                    return Ok(value);
                 }
                 "macroexpand" => {
                     return macroexpand(list.pop_front().unwrap(), &env);
