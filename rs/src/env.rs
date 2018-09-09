@@ -1,4 +1,3 @@
-use generational_arena::{Arena, Index};
 use std::cell::RefCell;
 use fnv::FnvHashMap;
 use std::fmt;
@@ -7,107 +6,62 @@ use std::fmt::Formatter;
 use std::rc::Rc;
 use types::MalType;
 
-#[derive(Clone, Debug)]
-struct Node {
-    parent: Option<Index>,
-    data: FnvHashMap<String, MalType>,
+#[derive(Clone, Debug, PartialEq)]
+pub struct EnvStruct {
+    data: RefCell<FnvHashMap<String, MalType>>,
+    outer: Option<Rc<EnvStruct>>,
 }
 
+pub type Env = Rc<EnvStruct>;
 
-#[derive(Clone, Debug)]
-pub struct Env {
-    index: Index,
-    arena: Rc<RefCell<Arena<Node>>>,
-}
+pub fn env_new(outer: Option<Env>, binds: Vec<String>, exprs: Vec<MalType>) -> Env {
+    let env = Rc::new(EnvStruct {
+            data: RefCell::new(FnvHashMap::default()),
+            outer
+    });
 
-
-impl PartialEq for Env {
-    fn eq(&self, other: &Env) -> bool {
-        self.index == other.index
+    for (k, v) in binds.into_iter().zip(exprs) {
+        env_set(env.clone(),k, v);
     }
+
+    env
 }
 
-impl Env {
-    pub fn new(outer: Option<Env>, binds: Vec<String>, exprs: Vec<MalType>) -> Self {
-        let arena = match outer {
-            None => Rc::new(RefCell::new(Arena::new())),
-            Some(ref outer) => outer.arena.clone(),
-        };
-        let index = arena.borrow_mut().insert(
-            Node {
-                data: FnvHashMap::with_capacity_and_hasher(10, Default::default()),
-                parent: outer.map(|e| e.index),
-            }
-        );
-        let mut env = Env {
-            index,
-            arena,
-        };
-        for (k, v) in binds.into_iter().zip(exprs) {
-            env.set(k, v);
+pub fn env_set(env: Env, key: String, value: MalType) {
+    env.data.borrow_mut().insert(key, value);
+}
+
+pub fn env_find(mut env: Env, key: &str) -> Option<Env> {
+    loop {
+        if env.data.borrow().contains_key(key) {
+            return Some(env);
         }
-
-        env
-    }
-
-    pub fn set(&mut self, key: String, value: MalType) {
-        let mut arena = self.arena.borrow_mut();
-        let data = &mut arena[self.index].data;
-
-        data.insert(key, value);
-    }
-
-    pub fn find(&self, key: &str) -> Option<Env> {
-        let arena = self.arena.borrow();
-
-        let mut index = self.index;
-        loop {
-            let node = arena.get(index);
-            if let Some(true) = node.map(|map| map.data.contains_key(key)) {
-                return Some(Env {
-                    index,
-                    arena: self.arena.clone(),
-                });
-            }
-            index = match node.and_then(|n| n.parent) {
-                Some(i) => i,
-                None => return None
-            };
-        }
-    }
-
-    pub fn get(&self, key: &str) -> Option<MalType> {
-        let env = self.find(key);
-
-        env.and_then(|env| {
-            let arena = env.arena.borrow();
-            let node = arena.get(env.index).expect("get node");
-            node.data.get(key).cloned()
-        })
-    }
-
-    pub fn root(&self) -> Env {
-        let arena = self.arena.borrow();
-
-        let mut index = self.index;
-        loop {
-            let node = arena.get(index);
-            match node.and_then(|n| n.parent) {
-                Some(i) => index = i,
-                None => return Env {
-                    index,
-                    arena: self.arena.clone(),
-                }
-            };
+        if let Some(e) = env.outer.clone() {
+            env = e;
+        } else {
+            return None;
         }
     }
 }
 
-impl Display for Env {
+pub fn env_get(env: Env, key: &str) -> Option<MalType> {
+    if let Some(env) = env_find(env, key) {
+        return env.data.borrow().get(key).cloned();
+    }
+    None
+}
+
+pub fn env_root(mut env: Env) -> Env {
+    while let Some(e) = env.outer.clone() {
+        env = e;
+    }
+    env
+}
+
+
+impl Display for EnvStruct {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        let arena = self.arena.borrow();
-        let map = &arena.get(self.index).unwrap().data;
-        write!(f, "{:#?}", map);
+        write!(f, "{:#?}", self.data.borrow());
         Ok(())
     }
 }

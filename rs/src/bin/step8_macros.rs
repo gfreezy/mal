@@ -42,13 +42,13 @@ fn call(params: Vec<MalType>, c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType
         let varargs = exprs;
         let mut exprs = positioned_args;
         exprs.push(MalType::List(varargs));
-        Env::new(Some(c_env.env.clone()), binds, exprs)
+        env_new(Some(c_env.env.clone()), binds, exprs)
     } else {
         ensure!(
             exprs.len() == binds.len(),
             "closure arguments not match params"
         );
-        Env::new(Some(c_env.env.clone()), binds, exprs)
+        env_new(Some(c_env.env.clone()), binds, exprs)
     };
 
     eval(c_env.body.clone(), new_env)
@@ -144,7 +144,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                 }
                 "let*" => {
                     ensure!(list.len() == 2, "let* should have 2 params");
-                    let mut new_env = Env::new(Some(env.clone()), Vec::new(), Vec::new());
+                    let mut new_env = env_new(Some(env.clone()), Vec::new(), Vec::new());
                     let mut binding_list = list.remove(0).into_items();
                     ensure!(
                         binding_list.len() % 2 == 0,
@@ -195,7 +195,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                 }
                 "fn*" => {
                     ensure!(list.len() == 2, "fn* should have 2 params");
-                    let c_env = ClosureEnv::new(list.remove(0), list.remove(0), env.clone());
+                    let c_env = Closureenv_new(list.remove(0), list.remove(0), env.clone());
                     return Ok(MalType::Closure(Closure::new(call, Some(c_env))));
                 }
                 "eval" => {
@@ -330,7 +330,7 @@ fn main() -> Fallible<()> {
     pretty_env_logger::init();
 
     let ns = Ns::new();
-    let mut repl_env = Env::new(None, Vec::new(), Vec::new());
+    let mut repl_env = env_new(None, Vec::new(), Vec::new());
     for (k, v) in ns.map {
         repl_env.set(k, MalType::Closure(v));
     }

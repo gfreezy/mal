@@ -43,7 +43,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                 }
                 "let*" => {
                     ensure!(list.len() == 2, "let* should have 2 params");
-                    let mut new_env = Env::new(Some(env.clone()), Vec::new(), Vec::new());
+                    let mut new_env = env_new(Some(env.clone()), Vec::new(), Vec::new());
                     let mut binding_list = list.remove(0).into_items();
                     ensure!(
                         binding_list.len() % 2 == 0,
@@ -142,7 +142,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     let varargs = exprs;
                     let mut exprs = positioned_args;
                     exprs.push(MalType::List(varargs));
-                    Env::new(Some(closure.env), binds, exprs)
+                    env_new(Some(closure.env), binds, exprs)
                 } else {
                     ensure!(
                         list.len() == binds.len(),
@@ -152,7 +152,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                         .into_iter()
                         .map(|el| eval(el, env.clone()))
                         .collect::<Fallible<Vec<MalType>>>()?;
-                    Env::new(Some(closure.env), binds, exprs)
+                    env_new(Some(closure.env), binds, exprs)
                 };
 
                 mal = closure.body;
@@ -236,7 +236,7 @@ fn main() -> Fallible<()> {
     }
 
     let ns = Ns::new();
-    let mut repl_env = Env::new(None, Vec::new(), Vec::new());
+    let mut repl_env = env_new(None, Vec::new(), Vec::new());
     for (k, v) in ns.map {
         repl_env.set(k, MalType::Func(v));
     }
