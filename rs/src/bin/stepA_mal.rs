@@ -105,10 +105,10 @@ fn is_macro_call(ast: &MalType, env: &Env) -> bool {
     if ast.did_collection_have_leading_symbol() {
         let items = ast.to_items();
         let symbol = env_get(env.clone(), items.front().unwrap().to_symbol());
-        return symbol.map(|f| f.is_closure() && f.is_macro_closure()) == Some(true);
+        symbol.map(|f| f.is_closure() && f.is_macro_closure()) == Some(true)
+    } else {
+        false
     }
-
-    false
 }
 
 fn macroexpand(mut ast: MalType, env: &Env) -> Fallible<MalType> {
@@ -331,7 +331,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
 fn eval_ast(ast: MalType, env: &Env) -> Fallible<MalType> {
     match ast {
         MalType::Symbol(s) => {
-            env_get(env.clone(), &s).map_or(Err(format_err!("'{}' not found", s)), |f| Ok(f))
+            env_get(env.clone(), &s).map_or(Err(format_err!("'{}' not found", s)), Ok)
         }
         MalType::List(list, ..) => {
             let mut new_l = LinkedList::new();
