@@ -1,9 +1,9 @@
 use env::Env;
 use failure::Fallible;
-use std::collections::LinkedList;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::LinkedList;
 use std::rc::Rc;
 
 pub type ClosureFunc = fn(LinkedList<MalType>, Option<Rc<ClosureEnv>>) -> Fallible<MalType>;
@@ -21,7 +21,6 @@ macro_rules! linked_list {
         v
     }}
 }
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MalType {

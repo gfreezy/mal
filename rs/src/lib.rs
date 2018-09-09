@@ -9,8 +9,8 @@ extern crate lazy_static;
 extern crate generational_arena;
 #[macro_use]
 extern crate debug_stub_derive;
-extern crate time;
 extern crate fnv;
+extern crate time;
 
 #[macro_use]
 pub mod types;
@@ -19,4 +19,3 @@ pub mod env;
 pub mod error;
 pub mod printer;
 pub mod reader;
-

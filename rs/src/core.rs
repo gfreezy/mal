@@ -4,6 +4,7 @@ use printer::pr_str;
 use reader::read_str;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::LinkedList;
 use std::fs::File;
 use std::io::stdout;
 use std::io::Write;
@@ -12,7 +13,6 @@ use std::rc::Rc;
 use time;
 use types::ClosureEnv;
 use types::{Closure, MalType};
-use std::collections::LinkedList;
 
 fn add(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 2, "add should have 2 params");
@@ -93,7 +93,9 @@ fn is_list(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> F
 
 fn is_empty(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "empty? should have 1 params");
-    Ok(MalType::Bool(params.pop_front().unwrap().is_empty_collection()))
+    Ok(MalType::Bool(
+        params.pop_front().unwrap().is_empty_collection(),
+    ))
 }
 
 fn count(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -153,14 +155,20 @@ fn less_than(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) ->
     Ok(MalType::Bool(left.into_number() < right.into_number()))
 }
 
-fn less_than_equal(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+fn less_than_equal(
+    mut params: LinkedList<MalType>,
+    _c_env: Option<Rc<ClosureEnv>>,
+) -> Fallible<MalType> {
     ensure!(params.len() == 2, "<= should have 2 params");
     let left = params.pop_front().unwrap();
     let right = params.pop_front().unwrap();
     Ok(MalType::Bool(left.into_number() <= right.into_number()))
 }
 
-fn greater_than(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+fn greater_than(
+    mut params: LinkedList<MalType>,
+    _c_env: Option<Rc<ClosureEnv>>,
+) -> Fallible<MalType> {
     ensure!(params.len() == 2, "> should have 2 params");
     let left = params.pop_front().unwrap();
     let right = params.pop_front().unwrap();
@@ -177,7 +185,10 @@ fn greater_than_equal(
     Ok(MalType::Bool(left.into_number() >= right.into_number()))
 }
 
-fn read_string(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+fn read_string(
+    mut params: LinkedList<MalType>,
+    _c_env: Option<Rc<ClosureEnv>>,
+) -> Fallible<MalType> {
     ensure!(params.len() == 1, "read_string should have 1 params");
     let p = params.pop_front().unwrap();
     let s = p.into_string();
@@ -196,7 +207,9 @@ fn slurp(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fal
 
 fn atom(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "atom should have 1 params");
-    Ok(MalType::Atom(Rc::new(RefCell::new(params.pop_front().unwrap()))))
+    Ok(MalType::Atom(Rc::new(RefCell::new(
+        params.pop_front().unwrap(),
+    ))))
 }
 
 fn is_atom(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -247,10 +260,7 @@ fn concat(params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallib
         l.append(&mut mal.into_items())
     }
 
-    Ok(MalType::List(
-        l,
-        Box::new(MalType::Nil),
-    ))
+    Ok(MalType::List(l, Box::new(MalType::Nil)))
 }
 
 fn nth(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -332,12 +342,16 @@ fn is_nil(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fa
 
 fn is_true(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "true? should have 1 params");
-    Ok(MalType::Bool(params.pop_front().unwrap() == MalType::Bool(true)))
+    Ok(MalType::Bool(
+        params.pop_front().unwrap() == MalType::Bool(true),
+    ))
 }
 
 fn is_false(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "false? should have 1 params");
-    Ok(MalType::Bool(params.pop_front().unwrap() == MalType::Bool(false)))
+    Ok(MalType::Bool(
+        params.pop_front().unwrap() == MalType::Bool(false),
+    ))
 }
 
 fn is_symbol(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -358,7 +372,9 @@ fn is_fn(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fal
 
 fn is_macro(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
     ensure!(params.len() == 1, "macro? should have 1 params");
-    Ok(MalType::Bool(params.pop_front().unwrap().is_macro_closure()))
+    Ok(MalType::Bool(
+        params.pop_front().unwrap().is_macro_closure(),
+    ))
 }
 
 fn symbol(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
@@ -373,7 +389,10 @@ fn keyword(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> F
     Ok(MalType::Keyword(format!(":{}", s)))
 }
 
-fn is_keyword(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+fn is_keyword(
+    mut params: LinkedList<MalType>,
+    _c_env: Option<Rc<ClosureEnv>>,
+) -> Fallible<MalType> {
     ensure!(params.len() == 1, "is_keyword should have 1 params");
     Ok(MalType::Bool(params.pop_front().unwrap().is_keyword()))
 }
@@ -465,7 +484,10 @@ fn vals(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fall
     ))
 }
 
-fn is_sequential(mut params: LinkedList<MalType>, _c_env: Option<Rc<ClosureEnv>>) -> Fallible<MalType> {
+fn is_sequential(
+    mut params: LinkedList<MalType>,
+    _c_env: Option<Rc<ClosureEnv>>,
+) -> Fallible<MalType> {
     let l = params.pop_front().unwrap();
     Ok(MalType::Bool(l.is_collection()))
 }

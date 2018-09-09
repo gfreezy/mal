@@ -2,8 +2,8 @@ use error::CommentFoundError;
 use failure::Fallible;
 use regex::Regex;
 use std::collections::HashMap;
-use types::MalType;
 use std::collections::LinkedList;
+use types::MalType;
 
 struct Reader {
     tokens: Vec<String>,

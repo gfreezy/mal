@@ -1,5 +1,5 @@
-use std::cell::RefCell;
 use fnv::FnvHashMap;
+use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -16,12 +16,12 @@ pub type Env = Rc<EnvStruct>;
 
 pub fn env_new(outer: Option<Env>, binds: Vec<String>, exprs: Vec<MalType>) -> Env {
     let env = Rc::new(EnvStruct {
-            data: RefCell::new(FnvHashMap::default()),
-            outer
+        data: RefCell::new(FnvHashMap::default()),
+        outer,
     });
 
     for (k, v) in binds.into_iter().zip(exprs) {
-        env_set(env.clone(),k, v);
+        env_set(env.clone(), k, v);
     }
 
     env
@@ -57,7 +57,6 @@ pub fn env_root(mut env: Env) -> Env {
     }
     env
 }
-
 
 impl Display for EnvStruct {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
