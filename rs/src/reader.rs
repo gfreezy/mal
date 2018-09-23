@@ -1,13 +1,14 @@
+use error::CommentFoundError;
+use failure::Fallible;
 use regex::Regex;
+use std::collections::HashMap;
+use std::collections::LinkedList;
 use types::MalType;
-use failure::Error;
-
 
 struct Reader {
     tokens: Vec<String>,
     current_pos: usize,
 }
-
 
 impl Reader {
     fn new(tokens: Vec<String>) -> Self {
@@ -28,29 +29,28 @@ impl Reader {
     }
 }
 
-
-pub fn read_str(s: &str) -> Result<MalType, Error> {
+pub fn read_str(s: &str) -> Fallible<MalType> {
     let tokens = tokenizer(s);
     let mut reader = Reader::new(tokens);
     read_form(&mut reader)
 }
 
-
 fn tokenizer(s: &str) -> Vec<String> {
     lazy_static! {
-        static ref RE: Regex = Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"|;.*|[^\s\[\]{}('"`,;)]*)"#).expect("make regexp");
+        static ref RE: Regex =
+            Regex::new(r#"[\s,]*(~@|[\[\]{}()'`~^@]|"(?:\\.|[^\\"])*"|;.*|[^\s\[\]{}('"`,;)]*)"#)
+                .expect("make regexp");
     }
 
     let mut caps = Vec::new();
     for cap in RE.captures_iter(s) {
         caps.push(cap[1].to_string());
     }
-//    println!("{:?}", caps);
+    //        println!("{:?}", caps);
     caps
 }
 
-
-fn read_form(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_form(reader: &mut Reader) -> Fallible<MalType> {
     if let Some(token) = reader.peek() {
         let mut chars = token.chars();
         let first_char = chars.next();
@@ -69,95 +69,131 @@ fn read_form(reader: &mut Reader) -> Result<MalType, Error> {
                 }
             }
             Some(':') => return read_keyword(reader),
+            Some('"') => return read_string(reader),
             Some('^') => return read_with_meta(reader),
             Some('@') => return read_deref(reader),
-            Some(_) => return read_atom(reader),
+            Some(';') => return Err(CommentFoundError.into()),
+            Some(_) => return read_symbol(reader),
         }
     } else {
         bail!("no token available")
     }
 }
 
-
-fn read_list(reader: &mut Reader) -> Result<MalType, Error> {
-    let mut ret = Vec::new();
+fn read_list(reader: &mut Reader) -> Fallible<MalType> {
+    let mut ret = LinkedList::new();
     loop {
         reader.next();
 
         let c = match reader.peek() {
             None => bail!("expected ')'"),
-            Some(t) => t
+            Some(t) => t,
         };
         if c == ")" {
-            return Ok(MalType::List(ret));
+            return Ok(MalType::List(ret, Box::new(MalType::Nil)));
         }
-        let type_ = read_form(reader)?;
-        ret.push(type_);
+        let type_ = match read_form(reader) {
+            Ok(t) => t,
+            Err(e) => {
+                let _ = e.downcast::<CommentFoundError>()?;
+                continue;
+            }
+        };
+        ret.push_back(type_);
     }
 }
 
-
-fn read_vec(reader: &mut Reader) -> Result<MalType, Error> {
-    let mut ret = Vec::new();
+fn read_vec(reader: &mut Reader) -> Fallible<MalType> {
+    let mut ret = LinkedList::new();
     loop {
         reader.next();
 
         let c = match reader.peek() {
             None => bail!("expected ']'"),
-            Some(t) => t
+            Some(t) => t,
         };
         if c == "]" {
-            return Ok(MalType::Vec(ret));
+            return Ok(MalType::Vec(ret, Box::new(MalType::Nil)));
         }
-        let type_ = read_form(reader)?;
-        ret.push(type_);
+        let type_ = match read_form(reader) {
+            Ok(t) => t,
+            Err(e) => {
+                let _ = e.downcast::<CommentFoundError>()?;
+                continue;
+            }
+        };
+        ret.push_back(type_);
     }
 }
 
-
-fn read_hashmap(reader: &mut Reader) -> Result<MalType, Error> {
-    let mut ret = Vec::new();
+fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
+    let mut ret: Vec<MalType> = Vec::new();
     loop {
         reader.next();
 
         let c = match reader.peek() {
-            None => bail!("expected '}'"),
-            Some(t) => t
+            None => bail!("expected '}}'"),
+            Some(t) => t,
         };
         if c == "}" {
-            return Ok(MalType::Hashmap(ret));
+            let mut mapping = HashMap::new();
+            let mut drain = ret.drain(..);
+            while let Some(key) = drain.next() {
+                let value = drain.next().expect("get value");
+                mapping.insert(key.into_hash_key(), value);
+            }
+            return Ok(MalType::Hashmap(mapping, Box::new(MalType::Nil)));
         }
-        let type_ = read_form(reader)?;
+        let type_ = match read_form(reader) {
+            Ok(t) => t,
+            Err(e) => {
+                let _ = e.downcast::<CommentFoundError>()?;
+                continue;
+            }
+        };
         ret.push(type_);
     }
 }
 
-
-fn read_quote(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_quote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    Ok(MalType::Quote(Box::new(read_form(reader)?)))
+    return Ok(MalType::List(
+        linked_list![MalType::Symbol("quote".to_string()), read_form(reader)?],
+        Box::new(MalType::Nil),
+    ));
 }
 
-
-fn read_quasiquote(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_quasiquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    Ok(MalType::Quasiquote(Box::new(read_form(reader)?)))
+    return Ok(MalType::List(
+        linked_list![
+            MalType::Symbol("quasiquote".to_string()),
+            read_form(reader)?,
+        ],
+        Box::new(MalType::Nil),
+    ));
 }
 
-
-fn read_unquote(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    Ok(MalType::Unquote(Box::new(read_form(reader)?)))
+    return Ok(MalType::List(
+        linked_list![MalType::Symbol("unquote".to_string()), read_form(reader)?],
+        Box::new(MalType::Nil),
+    ));
 }
 
-
-fn read_splice_unquote(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_splice_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    Ok(MalType::SpliceUnquote(Box::new(read_form(reader)?)))
+    return Ok(MalType::List(
+        linked_list![
+            MalType::Symbol("splice-unquote".to_string()),
+            read_form(reader)?,
+        ],
+        Box::new(MalType::Nil),
+    ));
 }
 
-
-fn read_atom(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_symbol(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
@@ -165,35 +201,55 @@ fn read_atom(reader: &mut Reader) -> Result<MalType, Error> {
                 return Ok(MalType::Num(num));
             }
 
-            return Ok(MalType::Symbol(token.to_owned()));
+            Ok(match token.as_ref() {
+                "nil" => MalType::Nil,
+                "true" => MalType::Bool(true),
+                "false" => MalType::Bool(false),
+                _ => MalType::Symbol(token.to_owned()),
+            })
         }
     }
 }
 
-fn read_keyword(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_string(reader: &mut Reader) -> Fallible<MalType> {
+    match reader.peek() {
+        None => unreachable!(),
+        Some(token) => Ok(MalType::from(token)),
+    }
+}
+
+fn read_keyword(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
-            return Ok(MalType::Symbol(token.to_owned()));
+            return Ok(MalType::Keyword(token.to_owned()));
         }
     }
 }
 
-fn read_with_meta(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_with_meta(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    let hashmap = read_form(reader)?;
+    let meta = read_form(reader)?;
     reader.next();
-    let vector = read_form(reader)?;
-    return Ok(MalType::WithMeta(Box::new(vector), Box::new(hashmap)));
+    let func = read_form(reader)?;
+    return Ok(MalType::List(
+        linked_list![MalType::Symbol("with-meta".to_string()), func, meta],
+        Box::new(MalType::Nil),
+    ));
 }
 
-
-fn read_deref(reader: &mut Reader) -> Result<MalType, Error> {
+fn read_deref(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
-            return Ok(MalType::Deref(token.to_owned()));
+            return Ok(MalType::List(
+                linked_list![
+                    MalType::Symbol("deref".to_string()),
+                    MalType::Symbol(token.to_string()),
+                ],
+                Box::new(MalType::Nil),
+            ));
         }
     }
 }

@@ -1,0 +1,150 @@
+#![feature(nll)]
+#[macro_use]
+extern crate failure;
+extern crate rs;
+extern crate rustyline;
+
+use failure::Error;
+use rs::env::Env;
+use rs::printer::pr_str;
+use rs::reader::read_str;
+use rs::types::MalType;
+use rustyline::Editor;
+use rustyline::error::ReadlineError;
+
+const HIST_PATH: &str = ".mal-history";
+
+fn add(a: f64, b: f64) -> f64 {
+    a + b
+}
+
+fn minus(a: f64, b: f64) -> f64 {
+    a - b
+}
+
+fn multiply(a: f64, b: f64) -> f64 {
+    a * b
+}
+
+fn divide(a: f64, b: f64) -> f64 {
+    a / b
+}
+
+
+fn read(line: &str) -> Fallible<MalType> {
+    read_str(line)
+}
+
+fn eval(mal: MalType, env: &mut Env) -> Fallible<MalType> {
+    let first_symbol = mal.get_first_symbol();
+    if first_symbol.is_none() {
+        return eval_ast(mal, env);
+    }
+
+    let first_symbol_str = first_symbol.unwrap().get_symbol_ref();
+    match first_symbol_str.as_ref() {
+        "def!" => {
+            let new_list = mal.get_items();
+            let symbol_key = new_list[1].get_symbol_ref().clone();
+            let value = eval(new_list[2].clone(), env)?;
+            Ok(env.set(symbol_key, value))
+        }
+        "let*" => {
+            let mut new_env = Env::new(Some(env.clone()), Vec::new(), Vec::new());
+            let list = mal.get_items();
+            let binding_list = list[1].get_items_ref();
+            for index in (0..binding_list.len()).into_iter().step_by(2) {
+                let key = binding_list[index].get_symbol_ref().clone();
+                let value = eval(binding_list[index+1].clone(), &mut new_env)?;
+                new_env.set(key, value);
+            }
+            let formula = list[2].clone();
+            eval(formula, &mut new_env)
+        },
+        "+"|"-"|"*"|"/" => {
+            let new_mal = eval_ast(mal, env)?;
+            let new_list = new_mal.get_items();
+            let func = new_list[0].clone().get_func();
+            let args: Vec<f64> = new_list[1..].iter().map(|mal| mal.clone().get_number()).collect();
+
+            Ok(MalType::Num(func(args[0], args[1])))
+        },
+        _ => eval_ast(mal, env)
+    }
+}
+
+
+fn print(s: &MalType) -> String {
+    pr_str(s)
+}
+
+fn rep(s: &str, env: &mut Env) -> Fallible<String> {
+    Ok(print(&eval(read(s)?, env)?))
+}
+
+fn eval_ast(ast: MalType, env: &mut Env) -> Fallible<MalType> {
+    match ast {
+        MalType::Symbol(s) => {
+            return env.get(&s).map_or(Err(format_err!("'{}' not found", s)), |f| Ok(f.clone()));
+        }
+        MalType::List(list) => return Ok(MalType::List(list.into_iter().map(|el| eval(el, env)).collect::<Fallible<Vec<MalType>>>()?)),
+        MalType::Vec(list) => return Ok(MalType::Vec(list.into_iter().map(|el| eval(el, env)).collect::<Fallible<Vec<MalType>>>()?)),
+        MalType::Hashmap(list) => {
+            let (keys, values): (Vec<(usize, MalType)>, Vec<(usize, MalType)>) =
+                list.into_iter()
+                    .enumerate()
+                    .partition(|&(ref index, _)| index % 2 == 0);
+
+            ensure!(keys.len() == values.len(), "not valid hashmap");
+            let new_values: Vec<MalType> =
+                values.into_iter()
+                    .map(|(_, el)| eval(el, env))
+                    .collect::<Fallible<Vec<MalType>>>()?;
+
+            let new_hashmap: Vec<MalType> =
+                keys.into_iter()
+                    .map(|(_, k)| k)
+                    .zip(new_values)
+                    .flat_map(|o| vec![o.0, o.1])
+                    .collect();
+
+            return Ok(MalType::Hashmap(new_hashmap));
+        }
+        _ => return Ok(ast)
+    }
+}
+
+fn main() -> Fallible<()> {
+    let mut rl = Editor::<()>::new();
+    if rl.load_history(HIST_PATH).is_err() {
+        println!("No previous history.")
+    }
+
+    let mut repl_env = Env::new(None, Vec::new(), Vec::new());
+    repl_env.set("+".to_string(), MalType::Func(add));
+    repl_env.set("-".to_string(), MalType::Func(minus));
+    repl_env.set("*".to_string(), MalType::Func(multiply));
+    repl_env.set("/".to_string(), MalType::Func(divide));
+
+    loop {
+        let line = rl.readline("user> ");
+        match line {
+            Ok(line) => {
+                rl.add_history_entry(line.as_ref());
+                match rep(line.as_ref(), &mut repl_env) {
+                    Ok(s) => println!("{}", s),
+                    Err(e) => println!("{}", e),
+                }
+            }
+            Err(ReadlineError::Eof) | Err(ReadlineError::Interrupted) => {
+                break;
+            }
+            Err(err) => {
+                return Err(err.into());
+            }
+        }
+    }
+
+    rl.save_history(HIST_PATH)?;
+    Ok(())
+}
