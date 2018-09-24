@@ -1,2 +1,2 @@
 % :
-	cargo build --bin $@
+	cargo build --release --bin $@
