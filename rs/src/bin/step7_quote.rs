@@ -27,7 +27,7 @@ fn quasiquote(ast: MalType) -> MalType {
         return MalType::List(vec![MalType::Symbol("quote".to_string()), ast]);
     }
 
-    let mut list = ast.into_items();
+    let mut list = ast.to_items();
     let first = list.remove(0);
     if first.is_symbol() && first.to_symbol() == "unquote" {
         return list.remove(0);
@@ -69,7 +69,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
             return eval_ast(mal, env.clone());
         }
 
-        let mut list = mal.into_items();
+        let mut list = mal.to_items();
         let first_mal = list.remove(0);
 
         if first_mal.is_symbol() {

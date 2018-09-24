@@ -3,7 +3,8 @@ use failure::Fallible;
 use regex::Regex;
 use std::collections::HashMap;
 use std::collections::LinkedList;
-use types::MalType;
+use types::{MalType, InnerMalType};
+use std::rc::Rc;
 
 struct Reader {
     tokens: Vec<String>,
@@ -90,7 +91,7 @@ fn read_list(reader: &mut Reader) -> Fallible<MalType> {
             Some(t) => t,
         };
         if c == ")" {
-            return Ok(MalType::List(ret, Box::new(MalType::Nil)));
+            return Ok(new_mal!(List(ret, new_mal!(Nil))));
         }
         let type_ = match read_form(reader) {
             Ok(t) => t,
@@ -113,7 +114,7 @@ fn read_vec(reader: &mut Reader) -> Fallible<MalType> {
             Some(t) => t,
         };
         if c == "]" {
-            return Ok(MalType::Vec(ret, Box::new(MalType::Nil)));
+            return Ok(new_mal!(Vec(ret, new_mal!(Nil))));
         }
         let type_ = match read_form(reader) {
             Ok(t) => t,
@@ -140,9 +141,9 @@ fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
             let mut drain = ret.drain(..);
             while let Some(key) = drain.next() {
                 let value = drain.next().expect("get value");
-                mapping.insert(key.into_hash_key(), value);
+                mapping.insert(key.to_hash_key(), value);
             }
-            return Ok(MalType::Hashmap(mapping, Box::new(MalType::Nil)));
+            return Ok(new_mal!(Hashmap(mapping, new_mal!(Nil))));
         }
         let type_ = match read_form(reader) {
             Ok(t) => t,
@@ -157,40 +158,40 @@ fn read_hashmap(reader: &mut Reader) -> Fallible<MalType> {
 
 fn read_quote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(
-        linked_list![MalType::Symbol("quote".to_string()), read_form(reader)?],
-        Box::new(MalType::Nil),
-    ));
+    return Ok(new_mal!(List(
+        linked_list![new_mal!(Symbol("quote".to_string())), read_form(reader)?],
+        new_mal!(Nil)
+    )));
 }
 
 fn read_quasiquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(
+    return Ok(new_mal!(List(
         linked_list![
-            MalType::Symbol("quasiquote".to_string()),
+            new_mal!(Symbol("quasiquote".to_string())),
             read_form(reader)?,
         ],
-        Box::new(MalType::Nil),
-    ));
+        new_mal!(Nil)
+    )));
 }
 
 fn read_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(
-        linked_list![MalType::Symbol("unquote".to_string()), read_form(reader)?],
-        Box::new(MalType::Nil),
-    ));
+    return Ok(new_mal!(List(
+        linked_list![new_mal!(Symbol("unquote".to_string())), read_form(reader)?],
+        new_mal!(Nil)
+    )));
 }
 
 fn read_splice_unquote(reader: &mut Reader) -> Fallible<MalType> {
     reader.next();
-    return Ok(MalType::List(
+    return Ok(new_mal!(List(
         linked_list![
-            MalType::Symbol("splice-unquote".to_string()),
+            new_mal!(Symbol("splice-unquote".to_string())),
             read_form(reader)?,
         ],
-        Box::new(MalType::Nil),
-    ));
+        new_mal!(Nil)
+    )));
 }
 
 fn read_symbol(reader: &mut Reader) -> Fallible<MalType> {
@@ -198,14 +199,14 @@ fn read_symbol(reader: &mut Reader) -> Fallible<MalType> {
         None => unreachable!(),
         Some(token) => {
             if let Ok(num) = token.parse::<f64>() {
-                return Ok(MalType::Num(num));
+                return Ok(new_mal!(Num(num)));
             }
 
             Ok(match token.as_ref() {
-                "nil" => MalType::Nil,
-                "true" => MalType::Bool(true),
-                "false" => MalType::Bool(false),
-                _ => MalType::Symbol(token.to_owned()),
+                "nil" => new_mal!(Nil),
+                "true" => new_mal!(Bool(true)),
+                "false" => new_mal!(Bool(false)),
+                _ => new_mal!(Symbol(token.to_owned())),
             })
         }
     }
@@ -214,7 +215,7 @@ fn read_symbol(reader: &mut Reader) -> Fallible<MalType> {
 fn read_string(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
-        Some(token) => Ok(MalType::from(token)),
+        Some(token) => Ok(new_mal!(from(token))),
     }
 }
 
@@ -222,7 +223,7 @@ fn read_keyword(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
-            return Ok(MalType::Keyword(token.to_owned()));
+            return Ok(new_mal!(Keyword(token.to_owned())));
         }
     }
 }
@@ -232,10 +233,10 @@ fn read_with_meta(reader: &mut Reader) -> Fallible<MalType> {
     let meta = read_form(reader)?;
     reader.next();
     let func = read_form(reader)?;
-    return Ok(MalType::List(
-        linked_list![MalType::Symbol("with-meta".to_string()), func, meta],
-        Box::new(MalType::Nil),
-    ));
+    return Ok(new_mal!(List(
+        linked_list![new_mal!(Symbol("with-meta".to_string())), func, meta],
+        new_mal!(Nil)
+    )));
 }
 
 fn read_deref(reader: &mut Reader) -> Fallible<MalType> {
@@ -243,13 +244,13 @@ fn read_deref(reader: &mut Reader) -> Fallible<MalType> {
     match reader.peek() {
         None => unreachable!(),
         Some(token) => {
-            return Ok(MalType::List(
+            return Ok(new_mal!(List(
                 linked_list![
-                    MalType::Symbol("deref".to_string()),
-                    MalType::Symbol(token.to_string()),
+                    new_mal!(Symbol("deref".to_string())),
+                    new_mal!(Symbol(token.to_string())),
                 ],
-                Box::new(MalType::Nil),
-            ));
+                new_mal!(Nil)
+            )));
         }
     }
 }
