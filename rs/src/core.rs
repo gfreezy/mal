@@ -104,7 +104,7 @@ fn count(mut params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallibl
         return Ok(new_mal!(Num(0f64)));
     }
     ensure!(param.is_collection(), "param should be list");
-    Ok(new_mal!(Num(param.to_items().len() as f64)))
+    Ok(new_mal!(Num(param.len() as f64)))
 }
 
 fn equal(mut params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallible<MalType> {
@@ -116,8 +116,8 @@ fn equal(mut params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallibl
 
 fn eq(left: MalType, right: MalType) -> bool {
     if left.is_collection() && right.is_collection() {
-        let inner_left = left.to_items();
-        let inner_right = right.to_items();
+        let inner_left = left.to_items_ref();
+        let inner_right = right.to_items_ref();
         if inner_left.len() != inner_right.len() {
             return false;
         }
@@ -125,23 +125,18 @@ fn eq(left: MalType, right: MalType) -> bool {
         inner_left
             .into_iter()
             .zip(inner_right)
-            .all(|(l, r)| eq(l, r))
+            .all(|(l, r)| eq(l.clone(), r.clone()))
     } else if left.is_hashmap() && right.is_hashmap() {
-        let inner_left = left.to_hashmap();
-        let mut inner_right = right.to_hashmap();
+        let inner_left = left.to_hashmap_ref();
+        let inner_right = right.to_hashmap_ref();
         if inner_left.len() != inner_right.len() {
             return false;
         }
 
-        for (k, v) in inner_left {
-            if let Some(rv) = inner_right.remove(&k) {
-                if !eq(v, rv) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
+        inner_right
+            .into_iter()
+            .zip(inner_right)
+            .all(|((lk, lv), (rk, rv))| lk == rk && eq(lv.clone(), rv.clone()))
     } else {
         return left == right;
     }
@@ -256,7 +251,7 @@ fn concat(params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallible<M
     );
     let mut l = LinkedList::new();
     for mal in params {
-        l.append(&mut mal.to_items())
+        l.extend(&mut mal.to_items_ref().iter().cloned())
     }
 
     Ok(new_mal!(List(l, new_mal!(Nil))))
@@ -274,9 +269,9 @@ fn nth(mut params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallible<
     );
     let index = float_index.trunc() as usize;
     ensure!(list.is_collection(), "nth's second param should be list");
-    let l = list.to_items();
+    let l = list.to_items_ref();
     ensure!(l.len() > index, "nth no enough items in list");
-    Ok(l.into_iter().nth(index).unwrap())
+    Ok(l.iter().nth(index).unwrap().clone())
 }
 
 fn first(mut params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallible<MalType> {
@@ -286,8 +281,8 @@ fn first(mut params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallibl
         return Ok(new_mal!(Nil));
     }
     ensure!(list.is_collection(), "first's param should be list or nil");
-    let mut l = list.to_items();
-    Ok(l.pop_front().unwrap())
+    let l = list.to_items_ref();
+    Ok(l.front().unwrap().clone())
 }
 
 fn rest(mut params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallible<MalType> {
@@ -314,7 +309,7 @@ fn apply(mut params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallibl
     ensure!(func.is_closure(), "apply's first param should be func");
     let list = params.pop_back().unwrap();
     ensure!(list.is_collection(), "apply's last param should be list");
-    params.extend(list.to_items());
+    params.extend(list.to_items_ref().iter().cloned());
     func.to_closure().call(params)
 }
 
@@ -326,9 +321,9 @@ fn map(mut params: LinkedList<MalType>, _c_env: Option<ClosureEnv>) -> Fallible<
     ensure!(list.is_collection(), "map's last param should be list");
     let f = func.to_closure();
     Ok(new_mal!(List(
-        list.to_items()
+        list.to_items_ref()
             .into_iter()
-            .map(|mal| f.call(linked_list![mal]))
+            .map(|mal| f.call(linked_list![mal.clone()]))
             .collect::<Fallible<LinkedList<MalType>>>()?,
         new_mal!(Nil)
     )))

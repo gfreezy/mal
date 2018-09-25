@@ -71,14 +71,14 @@ fn quasiquote(ast: MalType) -> MalType {
 
     let mut list = ast.to_items();
     let first = list.pop_front().unwrap();
-    if first.is_symbol() && first.to_symbol() == "unquote" {
+    if first.is_symbol() && first.to_symbol_ref() == "unquote" {
         return list.pop_front().unwrap();
     }
 
     if is_pair(&first) {
         let mut list_of_first = first.clone().to_items();
         let first_of_first = list_of_first.pop_front().unwrap();
-        if first_of_first.is_symbol() && first_of_first.to_symbol() == "splice-unquote" {
+        if first_of_first.is_symbol() && first_of_first.to_symbol_ref() == "splice-unquote" {
             let ret = linked_list![
                 new_mal!(Symbol("concat".to_string())),
                 list_of_first.pop_front().unwrap(),
@@ -98,13 +98,13 @@ fn quasiquote(ast: MalType) -> MalType {
 }
 
 fn is_pair(param: &MalType) -> bool {
-    param.is_collection() && !param.to_items().is_empty()
+    param.is_collection() && !param.to_items_ref().is_empty()
 }
 
 fn is_macro_call(ast: &MalType, env: &Env) -> bool {
     if ast.did_collection_have_leading_symbol() {
-        let items = ast.to_items();
-        let symbol = env_get(env.clone(), &items.front().unwrap().to_symbol());
+        let items = ast.to_items_ref();
+        let symbol = env_get(env.clone(), items.front().unwrap().to_symbol_ref());
         symbol.map(|f| f.is_closure() && f.is_macro_closure()) == Some(true)
     } else {
         false
@@ -115,7 +115,7 @@ fn macroexpand(mut ast: MalType, env: &Env) -> Fallible<MalType> {
     while is_macro_call(&ast, env) {
         let mut items = ast.to_items();
         let first_el = items.pop_front().unwrap();
-        let func = env_get(env.clone(), &first_el.to_symbol()).expect("get macro func");
+        let func = env_get(env.clone(), first_el.to_symbol_ref()).expect("get macro func");
         ast = func.to_closure().call(items)?;
     }
     Ok(ast)
@@ -140,7 +140,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
         let first_mal = list.pop_front().unwrap();
 
         if first_mal.is_symbol() {
-            match first_mal.to_symbol().as_ref() {
+            match first_mal.to_symbol_ref().as_str() {
                 "def!" => {
                     ensure!(list.len() == 2, "def! should have 2 params");
                     let symbol_key = list.pop_front().unwrap().to_symbol();
@@ -330,33 +330,32 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
 }
 
 fn eval_ast(ast: MalType, env: &Env) -> Fallible<MalType> {
-    let ast = Rc::try_unwrap(ast).unwrap_or_else(|s| (*s).clone());
-    match ast {
+    match &*ast {
         InnerMalType::Symbol(s) => {
-            env_get(env.clone(), &s).map_or(Err(format_err!("'{}' not found", s)), Ok)
+            env_get(env.clone(), s).map_or_else(||Err(format_err!("'{}' not found", s)), Ok)
         }
         InnerMalType::List(list, ..) => {
             let mut new_l = LinkedList::new();
             for el in list {
-                new_l.push_back(eval(el, env.clone())?);
+                new_l.push_back(eval(el.clone(), env.clone())?);
             }
             Ok(new_mal!(List(new_l, new_mal!(Nil))))
         }
         InnerMalType::Vec(list, ..) => {
             let mut new_l = LinkedList::new();
             for el in list {
-                new_l.push_back(eval(el, env.clone())?);
+                new_l.push_back(eval(el.clone(), env.clone())?);
             }
             Ok(new_mal!(Vec(new_l, new_mal!(Nil))))
         }
         InnerMalType::Hashmap(mapping, ..) => {
             let mut new_mapping = HashMap::new();
             for (k, v) in mapping {
-                new_mapping.insert(k, eval(v, env.clone())?);
+                new_mapping.insert(k.clone(), eval(v.clone(), env.clone())?);
             }
             Ok(new_mal!(Hashmap(new_mapping, new_mal!(Nil))))
         }
-        _ => Ok(Rc::new(ast)),
+        _ => Ok(ast),
     }
 }
 

@@ -1,6 +1,5 @@
 use types::MalType;
 use types::InnerMalType;
-use std::rc::Rc;
 
 pub fn pr_str(mal: &MalType, print_readably: bool) -> String {
     let mut s = String::new();

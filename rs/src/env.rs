@@ -31,10 +31,10 @@ pub fn env_set(env: Env, key: String, value: MalType) {
     env.data.borrow_mut().insert(key, value);
 }
 
-pub fn env_find(mut env: Env, key: &str) -> Option<Env> {
+pub fn env_get(mut env: Env, key: &str) -> Option<MalType> {
     loop {
-        if env.data.borrow().contains_key(key) {
-            return Some(env);
+        if let Some(v) = env.data.borrow().get(key) {
+            return Some(v.clone());
         }
         if let Some(e) = env.outer.clone() {
             env = e;
@@ -42,13 +42,6 @@ pub fn env_find(mut env: Env, key: &str) -> Option<Env> {
             return None;
         }
     }
-}
-
-pub fn env_get(env: Env, key: &str) -> Option<MalType> {
-    if let Some(env) = env_find(env, key) {
-        return env.data.borrow().get(key).cloned();
-    }
-    None
 }
 
 pub fn env_root(mut env: Env) -> Env {

@@ -133,6 +133,13 @@ impl InnerMalType {
         }
     }
 
+    pub fn to_symbol_ref(&self) -> &String {
+        match self {
+            InnerMalType::Symbol(s) => s,
+            _ => unreachable!(),
+        }
+    }
+
     pub fn to_string(&self) -> String {
         match self {
             InnerMalType::String(s) => s.clone(),
@@ -148,9 +155,32 @@ impl InnerMalType {
         }
     }
 
+    pub fn to_items_ref(&self) -> &LinkedList<MalType> {
+        match self {
+            InnerMalType::List(l, ..) => l,
+            InnerMalType::Vec(l, ..) => l,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            InnerMalType::List(l, ..) => l.len(),
+            InnerMalType::Vec(l, ..) => l.len(),
+            _ => unreachable!(),
+        }
+    }
+
     pub fn to_hashmap(&self) -> HashMap<HashKey, MalType> {
         match self {
             InnerMalType::Hashmap(l, ..) => l.clone(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn to_hashmap_ref(&self) -> &HashMap<HashKey, MalType> {
+        match self {
+            InnerMalType::Hashmap(l, ..) => l,
             _ => unreachable!(),
         }
     }
@@ -193,6 +223,7 @@ impl InnerMalType {
         }
         return false;
     }
+
     pub fn is_keyword(&self) -> bool {
         if let &InnerMalType::Keyword(_) = self {
             return true;
