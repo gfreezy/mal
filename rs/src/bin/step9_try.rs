@@ -61,7 +61,7 @@ fn quasiquote(ast: MalType) -> MalType {
         return MalType::List(vec![MalType::Symbol("quote".to_string()), ast]);
     }
 
-    let mut list = ast.into_items();
+    let mut list = ast.to_items();
     let first = list.remove(0);
     if first.is_symbol() && first.to_symbol() == "unquote" {
         return list.remove(0);
@@ -105,7 +105,7 @@ fn is_macro_call(ast: &MalType, env: Env) -> bool {
 
 fn macroexpand(mut ast: MalType, env: Env) -> Fallible<MalType> {
     while is_macro_call(&ast, env.clone()) {
-        let mut items = ast.into_items();
+        let mut items = ast.to_items();
         let first_el = items.remove(0);
         let func = env.get(first_el.to_symbol()).expect("get macro func");
         ast = func.into_closure().call(items)?;
@@ -128,7 +128,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
             return eval_ast(mal, env.clone());
         }
 
-        let mut list = mal.into_items();
+        let mut list = mal.to_items();
         let first_mal = list.remove(0);
 
         if first_mal.is_symbol() {
@@ -219,7 +219,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     let old_mal = atom.to_atom();
                     params.insert(0, old_mal);
                     if let MalType::Atom(a) = atom {
-                        let new_mal = func.into_closure().call(params)?;
+                        let new_mal = func.to_closure().call(params)?;
                         let _ = a.replace(new_mal.clone());
                         return Ok(new_mal);
                     }

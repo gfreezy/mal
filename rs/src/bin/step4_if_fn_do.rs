@@ -27,7 +27,7 @@ fn eval(mal: MalType, env: &mut Env) -> Fallible<MalType> {
         return eval_ast(mal, env);
     }
 
-    let mut list = mal.into_items();
+    let mut list = mal.to_items();
     let first_mal = list.remove(0);
 
     if first_mal.is_symbol() {

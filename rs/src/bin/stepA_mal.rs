@@ -22,7 +22,7 @@ use rs::printer::pr_str;
 use rs::reader::read_str;
 use rs::types::Closure;
 use rs::types::ClosureEnv;
-use rs::types::MalType;
+use rs::types::{MalType, InnerMalType};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::collections::HashMap;
@@ -34,7 +34,7 @@ const HIST_PATH: &str = ".mal-history";
 
 fn call_for_closure(
     mut params: LinkedList<MalType>,
-    c_env: Option<Rc<ClosureEnv>>,
+    c_env: Option<ClosureEnv>,
 ) -> Fallible<MalType> {
     ensure!(c_env.is_some(), "closure env should be available");
     let c_env = c_env.unwrap();
@@ -51,7 +51,7 @@ fn call_for_closure(
         binds.remove(idx);
         let varargs = params.split_off(idx);
         let mut exprs: Vec<MalType> = params.into_iter().collect();
-        exprs.push(MalType::List(varargs, Box::new(MalType::Nil)));
+        exprs.push(new_mal!(List(varargs, new_mal!(Nil))));
         env_new(Some(c_env.env.clone()), binds, exprs)
     } else {
         ensure!(len == binds.len(), "closure arguments not match params");
@@ -63,38 +63,38 @@ fn call_for_closure(
 
 fn quasiquote(ast: MalType) -> MalType {
     if !is_pair(&ast) {
-        return MalType::List(
-            linked_list![MalType::Symbol("quote".to_string()), ast],
-            Box::new(MalType::Nil),
-        );
+        return new_mal!(List(
+            linked_list![new_mal!(Symbol("quote".to_string())), ast],
+            new_mal!(Nil)
+        ));
     }
 
-    let mut list = ast.into_items();
+    let mut list = ast.to_items();
     let first = list.pop_front().unwrap();
     if first.is_symbol() && first.to_symbol() == "unquote" {
         return list.pop_front().unwrap();
     }
 
     if is_pair(&first) {
-        let mut list_of_first = first.clone().into_items();
+        let mut list_of_first = first.clone().to_items();
         let first_of_first = list_of_first.pop_front().unwrap();
         if first_of_first.is_symbol() && first_of_first.to_symbol() == "splice-unquote" {
             let ret = linked_list![
-                MalType::Symbol("concat".to_string()),
+                new_mal!(Symbol("concat".to_string())),
                 list_of_first.pop_front().unwrap(),
-                quasiquote(MalType::Vec(list, Box::new(MalType::Nil))),
+                quasiquote(new_mal!(Vec(list, new_mal!(Nil)))),
             ];
-            return MalType::List(ret, Box::new(MalType::Nil));
+            return new_mal!(List(ret, new_mal!(Nil)));
         }
     }
 
     let l = linked_list![
-        MalType::Symbol("cons".to_string()),
+        new_mal!(Symbol("cons".to_string())),
         quasiquote(first),
-        quasiquote(MalType::Vec(list, Box::new(MalType::Nil))),
+        quasiquote(new_mal!(Vec(list, new_mal!(Nil)))),
     ];
 
-    MalType::List(l, Box::new(MalType::Nil))
+    new_mal!(List(l, new_mal!(Nil)))
 }
 
 fn is_pair(param: &MalType) -> bool {
@@ -104,7 +104,7 @@ fn is_pair(param: &MalType) -> bool {
 fn is_macro_call(ast: &MalType, env: &Env) -> bool {
     if ast.did_collection_have_leading_symbol() {
         let items = ast.to_items();
-        let symbol = env_get(env.clone(), items.front().unwrap().to_symbol());
+        let symbol = env_get(env.clone(), &items.front().unwrap().to_symbol());
         symbol.map(|f| f.is_closure() && f.is_macro_closure()) == Some(true)
     } else {
         false
@@ -113,10 +113,10 @@ fn is_macro_call(ast: &MalType, env: &Env) -> bool {
 
 fn macroexpand(mut ast: MalType, env: &Env) -> Fallible<MalType> {
     while is_macro_call(&ast, env) {
-        let mut items = ast.into_items();
+        let mut items = ast.to_items();
         let first_el = items.pop_front().unwrap();
-        let func = env_get(env.clone(), first_el.to_symbol()).expect("get macro func");
-        ast = func.into_closure().call(items)?;
+        let func = env_get(env.clone(), &first_el.to_symbol()).expect("get macro func");
+        ast = func.to_closure().call(items)?;
     }
     Ok(ast)
 }
@@ -136,14 +136,14 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
             continue;
         }
 
-        let mut list = mal.into_items();
+        let mut list = mal.to_items();
         let first_mal = list.pop_front().unwrap();
 
         if first_mal.is_symbol() {
             match first_mal.to_symbol().as_ref() {
                 "def!" => {
                     ensure!(list.len() == 2, "def! should have 2 params");
-                    let symbol_key = list.pop_front().unwrap().into_symbol();
+                    let symbol_key = list.pop_front().unwrap().to_symbol();
                     let value = eval(list.pop_front().unwrap(), env.clone())?;
                     env_set(env.clone(), symbol_key, value.clone());
                     return Ok(value);
@@ -151,13 +151,13 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                 "let*" => {
                     ensure!(list.len() == 2, "let* should have 2 params");
                     let new_env = env_new(Some(env.clone()), Vec::new(), Vec::new());
-                    let mut binding_list = list.pop_front().unwrap().into_items();
+                    let mut binding_list = list.pop_front().unwrap().to_items();
                     ensure!(
                         binding_list.len() % 2 == 0,
                         "def! binding list should have 2n params"
                     );
                     while binding_list.len() >= 2 {
-                        let key = binding_list.pop_front().unwrap().into_symbol();
+                        let key = binding_list.pop_front().unwrap().to_symbol();
                         let value = eval(binding_list.pop_front().unwrap(), new_env.clone())?;
                         env_set(new_env.clone(), key, value);
                     }
@@ -175,7 +175,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                         mal = last;
                         continue;
                     }
-                    return Ok(MalType::Nil);
+                    return Ok(new_mal!(Nil));
                 }
                 "if" => {
                     ensure!(list.len() >= 2, "if should have at least 2 params");
@@ -183,14 +183,14 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     let condition_expr = list.pop_front().unwrap();
                     let then_clause = list.pop_front().unwrap();
                     let condition = eval(condition_expr, env.clone())?;
-                    match condition {
-                        MalType::Nil | MalType::Bool(false) => {
+                    match &*condition {
+                        InnerMalType::Nil | InnerMalType::Bool(false) => {
                             if !list.is_empty() {
                                 let else_clause = list.pop_front().unwrap();
                                 mal = else_clause;
                                 continue;
                             } else {
-                                return Ok(MalType::Nil);
+                                return Ok(new_mal!(Nil));
                             }
                         }
                         _ => {
@@ -206,10 +206,10 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                         list.pop_front().unwrap(),
                         env.clone(),
                     );
-                    return Ok(MalType::Closure(
+                    return Ok(new_mal!(Closure(
                         Closure::new(call_for_closure, Some(c_env)),
-                        Box::new(MalType::Nil),
-                    ));
+                        new_mal!(Nil)
+                    )));
                 }
                 "eval" => {
                     ensure!(list.len() == 1, "eval should have 1 params");
@@ -228,13 +228,14 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                 }
                 "defmacro!" => {
                     ensure!(list.len() == 2, "defmacro! should have 2 params");
-                    let symbol_key = list.pop_front().unwrap().into_symbol();
+                    let symbol_key = list.pop_front().unwrap().to_symbol();
                     let mut value = eval(list.pop_front().unwrap(), env.clone())?;
                     ensure!(
                         value.is_closure(),
                         "defmacro!'s second param should evaluate to func"
                     );
-                    value.set_is_macro();
+                    let new_value = Rc::make_mut(&mut value);
+                    new_value.set_is_macro();
                     env_set(env.clone(), symbol_key, value.clone());
                     return Ok(value);
                 }
@@ -247,10 +248,10 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                     let catch = list.pop_front().unwrap();
                     ensure!(
                         catch.get_first_symbol().map(|s| s.to_symbol())
-                            == Some(&"catch*".to_string()),
+                            == Some("catch*".to_string()),
                         "invalid syntax"
                     );
-                    let mut catch_clause = catch.into_items();
+                    let mut catch_clause = catch.to_items();
                     // remove "catch*" symbol
                     catch_clause.pop_front().unwrap();
                     ensure!(catch_clause.len() == 2, "catch* should have 2 params");
@@ -261,7 +262,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                             let downcast = e.downcast::<MalExceptionError>();
                             match downcast {
                                 Ok(MalExceptionError(s)) => read_str(&s)?,
-                                Err(e) => MalType::String(format!("{}", e)),
+                                Err(e) => new_mal!(String(format!("{}", e))),
                             }
                         }
                     };
@@ -271,7 +272,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                         variable_name_mal.is_symbol(),
                         "catch* first param should be symbol"
                     );
-                    let variable_name = variable_name_mal.into_symbol();
+                    let variable_name = variable_name_mal.to_symbol();
                     let new_env = env_new(Some(env.clone()), vec![variable_name], vec![exception]);
                     let catch_stmt = catch_clause.pop_front().unwrap();
                     mal = catch_stmt;
@@ -280,15 +281,15 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                 }
                 "env" => {
                     println!("{:#?}", env);
-                    return Ok(MalType::Nil);
+                    return Ok(new_mal!(Nil));
                 }
                 _ => {}
             };
         };
 
         let new_first_mal = eval(first_mal, env.clone())?;
-        return match new_first_mal {
-            MalType::Closure(ref closure, ..) => {
+        return match &*new_first_mal {
+            InnerMalType::Closure(closure, ..) => {
                 let mut params: LinkedList<MalType> = LinkedList::new();
                 for el in list {
                     params.push_back(eval(el, env.clone())?);
@@ -309,7 +310,7 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
                         binds.remove(idx);
                         let varargs = params.split_off(idx);
                         let mut exprs: Vec<MalType> = params.into_iter().collect();
-                        exprs.push(MalType::List(varargs, Box::new(MalType::Nil)));
+                        exprs.push(new_mal!(List(varargs, new_mal!(Nil))));
                         env_new(Some(c_env.env.clone()), binds, exprs)
                     } else {
                         ensure!(len == binds.len(), "closure arguments not match params");
@@ -329,32 +330,33 @@ fn eval(mut mal: MalType, mut env: Env) -> Fallible<MalType> {
 }
 
 fn eval_ast(ast: MalType, env: &Env) -> Fallible<MalType> {
+    let ast = Rc::try_unwrap(ast).unwrap_or_else(|s| (*s).clone());
     match ast {
-        MalType::Symbol(s) => {
+        InnerMalType::Symbol(s) => {
             env_get(env.clone(), &s).map_or(Err(format_err!("'{}' not found", s)), Ok)
         }
-        MalType::List(list, ..) => {
+        InnerMalType::List(list, ..) => {
             let mut new_l = LinkedList::new();
             for el in list {
                 new_l.push_back(eval(el, env.clone())?);
             }
-            Ok(MalType::List(new_l, Box::new(MalType::Nil)))
+            Ok(new_mal!(List(new_l, new_mal!(Nil))))
         }
-        MalType::Vec(list, ..) => {
+        InnerMalType::Vec(list, ..) => {
             let mut new_l = LinkedList::new();
             for el in list {
                 new_l.push_back(eval(el, env.clone())?);
             }
-            Ok(MalType::Vec(new_l, Box::new(MalType::Nil)))
+            Ok(new_mal!(Vec(new_l, new_mal!(Nil))))
         }
-        MalType::Hashmap(mapping, ..) => {
+        InnerMalType::Hashmap(mapping, ..) => {
             let mut new_mapping = HashMap::new();
             for (k, v) in mapping {
                 new_mapping.insert(k, eval(v, env.clone())?);
             }
-            Ok(MalType::Hashmap(new_mapping, Box::new(MalType::Nil)))
+            Ok(new_mal!(Hashmap(new_mapping, new_mal!(Nil))))
         }
-        _ => Ok(ast),
+        _ => Ok(Rc::new(ast)),
     }
 }
 
@@ -375,14 +377,14 @@ fn main() -> Fallible<()> {
         env_set(
             repl_env.clone(),
             k,
-            MalType::Closure(v, Box::new(MalType::Nil)),
+            new_mal!(Closure(v, new_mal!(Nil))),
         );
     }
 
     env_set(
         repl_env.clone(),
         "*host-language*".to_string(),
-        MalType::String("mal".to_string()),
+        new_mal!(String("mal".to_string())),
     );
     let _ = rep("(def! not (fn* (a) (if a false true)))", &repl_env)?;
     let _ = rep(
@@ -404,16 +406,16 @@ fn main() -> Fallible<()> {
         env_set(
             repl_env.clone(),
             "*ARGV*".to_string(),
-            MalType::List(
-                args.into_iter().map(MalType::String).collect(),
-                Box::new(MalType::Nil),
-            ),
+            new_mal!(List(
+                args.into_iter().map(|s|new_mal!(String(s))).collect(),
+                new_mal!(Nil)
+            )),
         );
     } else {
         env_set(
             repl_env.clone(),
             "*ARGV*".to_string(),
-            MalType::List(LinkedList::new(), Box::new(MalType::Nil)),
+            new_mal!(List(LinkedList::new(), new_mal!(Nil))),
         );
     }
 
